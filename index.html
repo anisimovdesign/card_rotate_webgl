@@ -288,6 +288,7 @@
         let rotationY = 0, targetRotationY = 0, lastRotationY = 0;
         let isDragging = false, startX = 0, isShowingBack = false;
         let shakeOffset = { x: 0, y: 0, z: 0 };
+        let hintRotationY = 0; // For initial hint animation
         let edgeIndexCount = 0;
 
         // ============================================
@@ -783,7 +784,7 @@
             
             // Smooth rotation
             rotationY += (targetRotationY - rotationY) * 0.15;
-            const rotY = rotationY * Math.PI / 180 + shakeOffset.y;
+            const rotY = rotationY * Math.PI / 180 + shakeOffset.y + hintRotationY;
             const rotX = shakeOffset.x;
             
             const skin = skins[currentSkin];
@@ -876,15 +877,40 @@
                 }
             }
             requestAnimationFrame(animate);
+        }
+        
+        // Initial hint animation - rotate Y axis to show card is interactive
+        function playHintAnimation() {
+            const duration = 1200; // ms
+            const maxAngle = 35 * Math.PI / 180; // 35 degrees in radians
+            let startTime = null;
+            
+            function animate(time) {
+                if (startTime === null) startTime = time; // Set start time on first frame
+                const elapsed = time - startTime;
+                const progress = elapsed / duration;
+                
+                if (progress < 1) {
+                    // Smooth out-and-back using sine wave
+                    hintRotationY = maxAngle * Math.sin(progress * Math.PI);
+                    requestAnimationFrame(animate);
+                } else {
+                    hintRotationY = 0;
+                }
             }
+            
+            // Start after a small delay so user sees the card first
+            setTimeout(() => requestAnimationFrame(animate), 600);
+        }
             
         function animate() {
             requestAnimationFrame(animate);
             render();
         }
-
+        
         // Start
         init();
+        playHintAnimation();
     </script>
 </body>
 </html>
