@@ -473,17 +473,34 @@
         // GEOMETRY CREATION
         // ============================================
         
-        function createPlaneGeometry(width, height) {
+        function createPlaneGeometry(width, height, radius) {
             const hw = width / 2, hh = height / 2;
-            // Vertices: bottom-left, bottom-right, top-right, top-left
-            const positions = new Float32Array([
-                -hw, -hh, 0,  hw, -hh, 0,  hw, hh, 0,  -hw, hh, 0
-            ]);
-            // UVs: corrected to match vertex order (0,0 = bottom-left in WebGL with FLIP_Y)
-            const uvs = new Float32Array([0, 0, 1, 0, 1, 1, 0, 1]);
-            const normals = new Float32Array([0,0,1, 0,0,1, 0,0,1, 0,0,1]);
-            const indices = new Uint16Array([0, 1, 2, 0, 2, 3]);
-            return { positions, uvs, normals, indices };
+            if (!radius) {
+                const positions = new Float32Array([-hw,-hh,0, hw,-hh,0, hw,hh,0, -hw,hh,0]);
+                const uvs = new Float32Array([0,0, 1,0, 1,1, 0,1]);
+                const normals = new Float32Array([0,0,1, 0,0,1, 0,0,1, 0,0,1]);
+                const indices = new Uint16Array([0,1,2, 0,2,3]);
+                return { positions, uvs, normals, indices };
+            }
+            const seg = 8, r = Math.min(radius, hw, hh);
+            const pts = [];
+            const corners = [
+                [hw-r, -hh+r, Math.PI*1.5], [-hw+r, -hh, null], [hw-r, -hh, null],
+            ];
+            pts.push([-hw+r, -hh]); pts.push([hw-r, -hh]);
+            for (let i = 0; i <= seg; i++) { const a = Math.PI*1.5+(Math.PI/2)*(i/seg); pts.push([hw-r+Math.cos(a)*r, -hh+r+Math.sin(a)*r]); }
+            pts.push([hw, hh-r]);
+            for (let i = 0; i <= seg; i++) { const a = (Math.PI/2)*(i/seg); pts.push([hw-r+Math.cos(a)*r, hh-r+Math.sin(a)*r]); }
+            pts.push([-hw+r, hh]);
+            for (let i = 0; i <= seg; i++) { const a = Math.PI/2+(Math.PI/2)*(i/seg); pts.push([-hw+r+Math.cos(a)*r, hh-r+Math.sin(a)*r]); }
+            pts.push([-hw, -hh+r]);
+            for (let i = 0; i <= seg; i++) { const a = Math.PI+(Math.PI/2)*(i/seg); pts.push([-hw+r+Math.cos(a)*r, -hh+r+Math.sin(a)*r]); }
+            const n = pts.length;
+            const positions = [0,0,0], uvs = [0.5,0.5], normals = [0,0,1];
+            for (const [x,y] of pts) { positions.push(x,y,0); uvs.push((x+hw)/width,(y+hh)/height); normals.push(0,0,1); }
+            const indices = [];
+            for (let i = 0; i < n; i++) indices.push(0, 1+i, 1+((i+1)%n));
+            return { positions: new Float32Array(positions), uvs: new Float32Array(uvs), normals: new Float32Array(normals), indices: new Uint16Array(indices) };
         }
         
         function createRoundedBoxGeometry(width, height, depth, radius) {
@@ -745,23 +762,23 @@
         }
 
         function createCard() {
-            const cardWidth = 3.2, cardHeight = 2.02, cardDepth = 0.04;
+            const cardWidth = 3.2, cardHeight = 2.02, cardDepth = 0.04, cornerRadius = 0.10;
             
-            // Front plane
-            const frontGeo = createPlaneGeometry(cardWidth, cardHeight);
+            // Front plane (rounded)
+            const frontGeo = createPlaneGeometry(cardWidth, cardHeight, cornerRadius);
             const frontPosBuffer = createBuffer(frontGeo.positions);
             const frontUVBuffer = createBuffer(frontGeo.uvs);
             const frontNormBuffer = createBuffer(frontGeo.normals);
             const frontIdxBuffer = createBuffer(frontGeo.indices, gl.ELEMENT_ARRAY_BUFFER);
-            frontVAO = { pos: frontPosBuffer, uv: frontUVBuffer, norm: frontNormBuffer, idx: frontIdxBuffer, count: 6, z: cardDepth/2 + 0.01 };
+            frontVAO = { pos: frontPosBuffer, uv: frontUVBuffer, norm: frontNormBuffer, idx: frontIdxBuffer, count: frontGeo.indices.length, z: cardDepth/2 + 0.005 };
             
-            // Back plane
-            const backGeo = createPlaneGeometry(cardWidth, cardHeight);
+            // Back plane (rounded)
+            const backGeo = createPlaneGeometry(cardWidth, cardHeight, cornerRadius);
             const backPosBuffer = createBuffer(backGeo.positions);
             const backUVBuffer = createBuffer(backGeo.uvs);
             const backNormBuffer = createBuffer(backGeo.normals);
             const backIdxBuffer = createBuffer(backGeo.indices, gl.ELEMENT_ARRAY_BUFFER);
-            backVAO = { pos: backPosBuffer, uv: backUVBuffer, norm: backNormBuffer, idx: backIdxBuffer, count: 6, z: -cardDepth/2 - 0.01 };
+            backVAO = { pos: backPosBuffer, uv: backUVBuffer, norm: backNormBuffer, idx: backIdxBuffer, count: backGeo.indices.length, z: -cardDepth/2 - 0.005 };
             
             // Edge
             const edgeGeo = createRoundedBoxGeometry(cardWidth, cardHeight, cardDepth, 0.10);
