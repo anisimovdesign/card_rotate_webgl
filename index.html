@@ -52,6 +52,10 @@
             background: radial-gradient(ellipse at 7% -4%, rgb(158, 242, 186) 0%, rgb(224, 255, 235) 100%);
         }
 
+        .bg-skin-2 {
+            background: radial-gradient(ellipse at 5% 0%, rgb(195, 185, 215) 0%, rgb(235, 230, 240) 100%);
+        }
+
         .container {
             position: relative;
             height: 100%;
@@ -167,6 +171,10 @@
             background: linear-gradient(135deg, rgb(166, 250, 204) 0%, rgb(191, 255, 212) 100%);
         }
 
+        .skin-2-gradient {
+            background: linear-gradient(135deg, rgb(200, 185, 215) 0%, rgb(225, 200, 220) 100%);
+        }
+
         /* Bottom island */
         .bottom-island {
             position: fixed;
@@ -221,6 +229,7 @@
     <!-- Background gradients -->
     <div class="background-gradient bg-skin-0" id="bg-0" style="opacity: 1;"></div>
     <div class="background-gradient bg-skin-1" id="bg-1" style="opacity: 0;"></div>
+    <div class="background-gradient bg-skin-2" id="bg-2" style="opacity: 0;"></div>
 
     <div class="container">
         <!-- Header -->
@@ -250,6 +259,9 @@
                 <div class="skin-circle" data-skin="1" id="skin-btn-1">
                     <div class="skin-circle-inner skin-1-gradient"></div>
                 </div>
+                <div class="skin-circle" data-skin="2" id="skin-btn-2">
+                    <div class="skin-circle-inner skin-2-gradient"></div>
+                </div>
             </div>
         </div>
 
@@ -276,14 +288,15 @@
         // Card skins configuration
         const skins = [
             { front: 'images/card_front.png', back: 'images/card_back.png', edge: [0.95, 0.45, 0.65] },
-            { front: 'images/card_front_2.png', back: 'images/card_back_2.png', edge: [0.5, 0.8, 0.75] }
+            { front: 'images/card_front_2.png', back: 'images/card_back_2.png', edge: [0.5, 0.8, 0.75] },
+            { front: 'images/Pay front.png', back: 'images/Pay front.png', mask: 'images/Pay mask.png', edge: [0.78, 0.75, 0.82], holographic: true }
         ];
 
         let currentSkin = 0;
         let gl, canvas;
-        let frontProgram, backProgram, edgeProgram;
+        let frontProgram, backProgram, edgeProgram, holoProgram;
         let frontVAO, backVAO, edgeVAO;
-        let frontTexture, backTexture;
+        let frontTexture, backTexture, maskTexture;
         let projectionMatrix, viewMatrix, modelMatrix;
         let rotationY = 0, targetRotationY = 0, lastRotationY = 0;
         let isDragging = false, startX = 0, isShowingBack = false;
@@ -624,6 +637,64 @@
                 gl_FragColor = vec4(color, 1.0);
             }
         `;
+        
+        const holoFS = `
+            precision highp float;
+            uniform sampler2D uTexture;
+            uniform sampler2D uMask;
+            uniform float uRotationAngle;
+            uniform vec3 uLightPos;
+            uniform float uAmbient;
+            varying vec2 vUV;
+            varying vec3 vNormal;
+            varying vec3 vViewPos;
+            
+            vec3 hsv2rgb(vec3 c) {
+                vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
+                vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
+                return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
+            }
+            
+            void main() {
+                vec4 tex = texture2D(uTexture, vUV);
+                vec4 maskColor = texture2D(uMask, vUV);
+                float lum = maskColor.r * 0.299 + maskColor.g * 0.587 + maskColor.b * 0.114;
+                float maskVal = maskColor.a * (1.0 - lum);
+                maskVal = smoothstep(0.03, 0.3, maskVal);
+                
+                vec3 N = normalize(vNormal);
+                vec3 L = normalize(uLightPos - (-vViewPos));
+                vec3 V = normalize(vViewPos);
+                vec3 H = normalize(L + V);
+                float diff = max(dot(N, L), 0.0);
+                float spec = pow(max(dot(N, H), 0.0), 32.0) * 0.15;
+                
+                float a = uRotationAngle;
+                float n1 = sin(vUV.x * 3.2 + vUV.y * 1.8 + a * 1.4);
+                float n2 = sin(vUV.x * 1.4 - vUV.y * 3.5 + a * 0.9 + 1.7);
+                float n3 = cos(vUV.x * 2.6 + vUV.y * 0.7 - a * 1.1 + 0.5);
+                float n4 = sin(vUV.x * 0.8 + vUV.y * 2.4 + a * 0.6 + 3.1);
+                float hue = fract((n1 + n2 + n3 + n4) * 0.12 + a * 0.15);
+                float sat = 0.32 + 0.12 * (sin(vUV.x * 2.0 - vUV.y * 1.5 + a) * 0.5 + 0.5);
+                float val = 0.95 + 0.05 * n3;
+                vec3 rainbow = hsv2rgb(vec3(hue, sat, val));
+                
+                float fresnel = 1.0 - max(dot(N, V), 0.0);
+                fresnel = pow(fresnel, 2.0);
+                
+                vec3 baseColor = tex.rgb * (uAmbient + diff * 0.5) + vec3(spec);
+                
+                float glossStrength = 0.5 + fresnel * 0.25;
+                vec3 glossHolo = mix(baseColor, rainbow, glossStrength);
+                
+                vec3 matteRainbow = hsv2rgb(vec3(hue, sat * 0.4, val * 0.85));
+                vec3 matteHolo = mix(baseColor, matteRainbow, 0.15);
+                
+                vec3 holoColor = mix(matteHolo, glossHolo, maskVal);
+                
+                gl_FragColor = vec4(holoColor, tex.a);
+            }
+        `;
 
         // ============================================
         // INITIALIZATION
@@ -648,6 +719,7 @@
             frontProgram = createProgram(texturedVS, texturedFS);
             backProgram = createProgram(texturedVS, texturedFS);
             edgeProgram = createProgram(coloredVS, coloredFS);
+            holoProgram = createProgram(texturedVS, holoFS);
             
             // Create matrices
             projectionMatrix = mat4.create();
@@ -666,6 +738,7 @@
             const skin = skins[currentSkin];
             frontTexture = loadTexture(skin.front);
             backTexture = loadTexture(skin.back);
+            if (skin.mask) maskTexture = loadTexture(skin.mask);
             
             setupEventListeners();
             animate();
@@ -703,6 +776,7 @@
             const skin = skins[currentSkin];
             frontTexture = loadTexture(skin.front);
             backTexture = loadTexture(skin.back);
+            maskTexture = skin.mask ? loadTexture(skin.mask) : null;
         }
 
         // ============================================
@@ -779,6 +853,50 @@
             gl.drawElements(gl.TRIANGLES, vao.count, gl.UNSIGNED_SHORT, 0);
         }
         
+        function drawHoloMesh(vao, baseTexture, maskTex, rotAngle, modelMat) {
+            gl.useProgram(holoProgram);
+            
+            const mvMatrix = mat4.create();
+            mat4.multiply(mvMatrix, viewMatrix, modelMat);
+            
+            const normalMat = new Float32Array(9);
+            mat4.normalFromMat4(normalMat, mvMatrix);
+            
+            gl.uniformMatrix4fv(gl.getUniformLocation(holoProgram, 'uProjection'), false, projectionMatrix);
+            gl.uniformMatrix4fv(gl.getUniformLocation(holoProgram, 'uModelView'), false, mvMatrix);
+            gl.uniformMatrix3fv(gl.getUniformLocation(holoProgram, 'uNormalMatrix'), false, normalMat);
+            gl.uniform3fv(gl.getUniformLocation(holoProgram, 'uLightPos'), [3, 3, 5]);
+            gl.uniform1f(gl.getUniformLocation(holoProgram, 'uAmbient'), 0.5);
+            gl.uniform1f(gl.getUniformLocation(holoProgram, 'uRotationAngle'), rotAngle);
+            
+            gl.activeTexture(gl.TEXTURE0);
+            gl.bindTexture(gl.TEXTURE_2D, baseTexture);
+            gl.uniform1i(gl.getUniformLocation(holoProgram, 'uTexture'), 0);
+            
+            gl.activeTexture(gl.TEXTURE1);
+            gl.bindTexture(gl.TEXTURE_2D, maskTex);
+            gl.uniform1i(gl.getUniformLocation(holoProgram, 'uMask'), 1);
+            
+            const posLoc = gl.getAttribLocation(holoProgram, 'aPosition');
+            const uvLoc = gl.getAttribLocation(holoProgram, 'aUV');
+            const normLoc = gl.getAttribLocation(holoProgram, 'aNormal');
+            
+            gl.bindBuffer(gl.ARRAY_BUFFER, vao.pos);
+            gl.enableVertexAttribArray(posLoc);
+            gl.vertexAttribPointer(posLoc, 3, gl.FLOAT, false, 0, 0);
+            
+            gl.bindBuffer(gl.ARRAY_BUFFER, vao.uv);
+            gl.enableVertexAttribArray(uvLoc);
+            gl.vertexAttribPointer(uvLoc, 2, gl.FLOAT, false, 0, 0);
+            
+            gl.bindBuffer(gl.ARRAY_BUFFER, vao.norm);
+            gl.enableVertexAttribArray(normLoc);
+            gl.vertexAttribPointer(normLoc, 3, gl.FLOAT, false, 0, 0);
+            
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, vao.idx);
+            gl.drawElements(gl.TRIANGLES, vao.count, gl.UNSIGNED_SHORT, 0);
+        }
+        
         function render() {
             gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
             
@@ -801,7 +919,11 @@
             mat4.rotateY(frontMat, frontMat, rotY);
             mat4.rotateX(frontMat, frontMat, rotX);
             mat4.translate(frontMat, frontMat, [0, 0, frontVAO.z]);
-            drawTexturedMesh(frontProgram, frontVAO, frontTexture, frontMat);
+            if (skin.holographic && maskTexture) {
+                drawHoloMesh(frontVAO, frontTexture, maskTexture, rotY, frontMat);
+            } else {
+                drawTexturedMesh(frontProgram, frontVAO, frontTexture, frontMat);
+            }
             
             // Back face
             const backMat = mat4.create();
@@ -837,6 +959,7 @@
             
             document.getElementById('skin-btn-0').addEventListener('click', () => selectSkin(0));
             document.getElementById('skin-btn-1').addEventListener('click', () => selectSkin(1));
+            document.getElementById('skin-btn-2').addEventListener('click', () => selectSkin(2));
         }
 
         function checkFlip() {
@@ -853,13 +976,13 @@
         
         function selectSkin(index) {
             if (currentSkin === index) return;
+            const dir = index > currentSkin ? 1 : -1;
             currentSkin = index;
             document.querySelectorAll('.skin-circle').forEach((el, i) => el.classList.toggle('selected', i === index));
-            document.getElementById('bg-0').style.opacity = index === 0 ? 1 : 0;
-            document.getElementById('bg-1').style.opacity = index === 1 ? 1 : 0;
+            skins.forEach((_, i) => { document.getElementById('bg-' + i).style.opacity = i === index ? 1 : 0; });
             updateTextures();
             if (navigator.vibrate) navigator.vibrate(5);
-            shakeCard(index === 1 ? 1 : -1);
+            shakeCard(dir);
         }
         
         function shakeCard(direction) {
