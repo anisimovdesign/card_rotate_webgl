@@ -56,6 +56,14 @@
             background: radial-gradient(ellipse at 5% 0%, rgb(190, 195, 200) 0%, rgb(225, 228, 232) 100%);
         }
 
+        .bg-skin-3 {
+            background: radial-gradient(ellipse at 5% 0%, rgb(235, 120, 100) 0%, rgb(245, 200, 190) 100%);
+        }
+
+        .bg-skin-4 {
+            background: radial-gradient(ellipse at 5% 0%, rgb(60, 60, 65) 0%, rgb(140, 140, 145) 100%);
+        }
+
         .container {
             position: relative;
             height: 100%;
@@ -175,6 +183,14 @@
             background: linear-gradient(135deg, rgb(195, 200, 210) 0%, rgb(215, 220, 228) 100%);
         }
 
+        .skin-3-gradient {
+            background: linear-gradient(135deg, rgb(230, 100, 80) 0%, rgb(240, 140, 120) 100%);
+        }
+
+        .skin-4-gradient {
+            background: linear-gradient(135deg, rgb(50, 50, 55) 0%, rgb(85, 85, 90) 100%);
+        }
+
         /* Bottom island */
         .bottom-island {
             position: fixed;
@@ -230,6 +246,8 @@
     <div class="background-gradient bg-skin-0" id="bg-0" style="opacity: 1;"></div>
     <div class="background-gradient bg-skin-1" id="bg-1" style="opacity: 0;"></div>
     <div class="background-gradient bg-skin-2" id="bg-2" style="opacity: 0;"></div>
+    <div class="background-gradient bg-skin-3" id="bg-3" style="opacity: 0;"></div>
+    <div class="background-gradient bg-skin-4" id="bg-4" style="opacity: 0;"></div>
 
     <div class="container">
         <!-- Header -->
@@ -262,6 +280,12 @@
                 <div class="skin-circle" data-skin="2" id="skin-btn-2">
                     <div class="skin-circle-inner skin-2-gradient"></div>
                 </div>
+                <div class="skin-circle" data-skin="3" id="skin-btn-3">
+                    <div class="skin-circle-inner skin-3-gradient"></div>
+                </div>
+                <div class="skin-circle" data-skin="4" id="skin-btn-4">
+                    <div class="skin-circle-inner skin-4-gradient"></div>
+                </div>
             </div>
         </div>
 
@@ -289,7 +313,9 @@
         const skins = [
             { front: 'images/card_front.png', back: 'images/card_back.png', edge: [0.95, 0.45, 0.65] },
             { front: 'images/card_front_2.png', back: 'images/card_back_2.png', edge: [0.5, 0.8, 0.75] },
-            { front: 'images/Pay front.png', back: 'images/Pay front.png', mask: 'images/Pay mask.png', edge: [0.78, 0.75, 0.82], holographic: true }
+            { front: 'images/Pay front.png', back: 'images/Pay back silver.png', mask: 'images/Pay mask.png', edge: [0.78, 0.75, 0.82], holographic: true },
+            { front: 'images/Pay front red.png', back: 'images/Pay back red.png', mask: 'images/Pay mask.png', edge: [0.92, 0.35, 0.28], holographic: true },
+            { front: 'images/Pay front black.png', back: 'images/Pay back black.png', mask: 'images/Pay mask.png', edge: [0.15, 0.15, 0.17], holographic: true }
         ];
 
         let currentSkin = 0;
@@ -980,9 +1006,9 @@
                 mat4.perspective(projectionMatrix, 45 * Math.PI / 180, canvas.clientWidth / canvas.clientHeight, 0.1, 100);
             });
             
-            document.getElementById('skin-btn-0').addEventListener('click', () => selectSkin(0));
-            document.getElementById('skin-btn-1').addEventListener('click', () => selectSkin(1));
-            document.getElementById('skin-btn-2').addEventListener('click', () => selectSkin(2));
+            skins.forEach((_, i) => {
+                document.getElementById('skin-btn-' + i).addEventListener('click', () => selectSkin(i));
+            });
         }
 
         function checkFlip() {
