@@ -713,7 +713,8 @@
             }
             
             float grain(vec2 p) {
-                return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+                vec2 q = floor(p);
+                return fract(sin(dot(q, vec2(127.1, 311.7))) * 43758.5453);
             }
             
             void main() {
@@ -726,8 +727,8 @@
                 vec3 N = normalize(vNormal);
                 float a = uRotationAngle;
                 
-                float px = grain(vUV * 50.0);
-                float py = grain(vUV * 50.0 + vec2(73.1, 19.3));
+                float px = grain(vUV * 800.0);
+                float py = grain(vUV * 800.0 + vec2(73.1, 19.3));
                 vec3 perturbedN = normalize(N + vec3((px - 0.5) * 0.16, (py - 0.5) * 0.16, 0.0) * maskVal);
                 
                 vec3 L = normalize(uLightPos - (-vViewPos));
