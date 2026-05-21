@@ -313,8 +313,8 @@
         const skins = [
             { front: 'images/card_front.png', back: 'images/card_back.png', edge: [0.95, 0.45, 0.65] },
             { front: 'images/card_front_2.png', back: 'images/card_back_2.png', edge: [0.5, 0.8, 0.75] },
-            { front: 'images/Pay front.png', back: 'images/Pay back silver.png', mask: 'images/Pay mask.png', edge: [0.78, 0.75, 0.82], holographic: true },
-            { front: 'images/Pay front red.png', back: 'images/Pay back red.png', mask: 'images/Pay mask.png', edge: [0.92, 0.35, 0.28], holographic: true },
+            { front: 'images/Pay front.png', back: 'images/Pay back silver.png', mask: 'images/Pay mask.png', edge: [0.85, 0.85, 0.85], holographic: true },
+            { front: 'images/Pay front red.png', back: 'images/Pay back red.png', mask: 'images/Pay mask.png', edge: [0.85, 0.85, 0.85], holographic: true },
             { front: 'images/Pay front black.png', back: 'images/Pay back black.png', mask: 'images/Pay mask.png', edge: [0.15, 0.15, 0.17], holographic: true }
         ];
 
@@ -707,33 +707,50 @@
                 vec4 maskColor = texture2D(uMask, vUV);
                 float lum = maskColor.r * 0.299 + maskColor.g * 0.587 + maskColor.b * 0.114;
                 float maskVal = maskColor.a * (1.0 - lum);
-                maskVal = smoothstep(0.03, 0.3, maskVal);
+                maskVal = smoothstep(0.1, 0.35, maskVal);
                 
                 vec3 N = normalize(vNormal);
+                float a = uRotationAngle;
+                
+                float px = grain(vUV * 50.0);
+                float py = grain(vUV * 50.0 + vec2(73.1, 19.3));
+                vec3 perturbedN = normalize(N + vec3((px - 0.5) * 0.16, (py - 0.5) * 0.16, 0.0) * maskVal);
+                
                 vec3 L = normalize(uLightPos - (-vViewPos));
                 vec3 V = normalize(vViewPos);
                 vec3 H = normalize(L + V);
-                float diff = max(dot(N, L), 0.0);
-                float spec = pow(max(dot(N, H), 0.0), 32.0) * 0.15;
+                float diff = max(dot(perturbedN, L), 0.0);
+                float spec = pow(max(dot(perturbedN, H), 0.0), 14.0) * 0.12;
                 
-                float a = uRotationAngle;
                 float n1 = sin(vUV.x * 3.2 + vUV.y * 1.8 + a * 1.4);
                 float n2 = sin(vUV.x * 1.4 - vUV.y * 3.5 + a * 0.9 + 1.7);
                 float n3 = cos(vUV.x * 2.6 + vUV.y * 0.7 - a * 1.1 + 0.5);
                 float n4 = sin(vUV.x * 0.8 + vUV.y * 2.4 + a * 0.6 + 3.1);
                 float hue = fract((n1 + n2 + n3 + n4) * 0.12 + a * 0.15);
-                float sat = 0.32 + 0.12 * (sin(vUV.x * 2.0 - vUV.y * 1.5 + a) * 0.5 + 0.5);
+                
+                float hlX = 0.5 + sin(a + 0.1) * 0.45;
+                float hlY = 0.5 + cos(a * 0.7 + 3.2) * 0.3;
+                float hlDist = length(vUV - vec2(hlX, hlY));
+                float hlFade = 1.0 - smoothstep(0.15, 0.55, hlDist);
+                
+                float sat = (0.42 + 0.12 * (sin(vUV.x * 2.0 - vUV.y * 1.5 + a) * 0.5 + 0.5)) * hlFade;
                 float val = 0.95 + 0.05 * n3;
                 vec3 rainbow = hsv2rgb(vec3(hue, sat, val));
                 
-                float fresnel = 1.0 - max(dot(N, V), 0.0);
+                float fresnel = 1.0 - max(dot(perturbedN, V), 0.0);
                 fresnel = pow(fresnel, 2.0);
                 
                 float matteSpec = spec * maskVal;
                 vec3 baseColor = tex.rgb * (uAmbient + diff * 0.5) + vec3(matteSpec);
                 
-                float glossStrength = 0.5 + fresnel * 0.25;
-                vec3 glossHolo = mix(baseColor + vec3(spec * (1.0 - maskVal)), rainbow, glossStrength);
+                float wX = vUV.x + sin(vUV.y * 5.0 + a * 1.3) * 0.12;
+                float wY = vUV.y + cos(vUV.x * 4.0 + a * 0.9) * 0.1;
+                float flare = pow(max(1.0 - abs(fract(wX * 0.8 - wY * 0.3 + a * 0.5) - 0.5) * 1.0, 0.0), 1.5) * 0.1;
+                
+                float glossGrain = (grain(vUV * 600.0 + vec2(41.7, 83.2)) - 0.5) * 0.025;
+                float glossStrength = (0.5 + fresnel * 0.55) * mix(0.3, 1.0, hlFade);
+                vec3 glossHolo = mix(baseColor + vec3(spec * (1.0 - maskVal)), rainbow, glossStrength) + vec3(glossGrain) * maskVal;
+                glossHolo += vec3(flare) * maskVal;
                 
                 float g = (grain(vUV * 800.0) - 0.5) * 0.03;
                 vec3 matteRainbow = hsv2rgb(vec3(hue, sat * 0.1, val * 0.95));
