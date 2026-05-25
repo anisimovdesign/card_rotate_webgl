@@ -313,7 +313,7 @@
         .sticker-phone {
             position: absolute;
             left: 50%;
-            bottom: 0;
+            bottom: 20px; /* ← вертикаль телефона: больше = выше, меньше/0 = ниже к краю */
             width: 100%;
             height: auto;
             z-index: 1;
@@ -1272,9 +1272,10 @@
             { src: 'images/Pay_sticker.png', bg: 'sticker-1', themeColor: '#D2C0E0', interactive: true, phone: 'images/Phone_back_empty.png' }
         ];
 
+        // Позиции и анимация стикера (радужный). Редактируй значения ниже.
         const STICKER_LAND = {
-            idleTop: 38,
-            landedTop: 52,
+            idleTop: 48,      // ← стикер на лицевой стороне: больше % = ниже в контейнере
+            landedTop: 54,      // ← стикер на телефоне (задняя сторона)
             landedRot: 5,
             landedScale: 0.7,
             maxRotY: 20,
