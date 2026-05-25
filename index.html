@@ -292,7 +292,52 @@
         .sticker-img {
             width: 100%;
             object-fit: contain;
-            transition: opacity 0.3s ease;
+            user-select: none;
+            -webkit-user-drag: none;
+        }
+
+        .sticker-view-simple.hidden,
+        .sticker-view-interactive.hidden {
+            display: none;
+        }
+
+        .sticker-stage {
+            width: 327px;
+            height: 280px;
+            position: relative;
+            touch-action: none;
+            overflow: visible;
+            perspective: 900px;
+        }
+
+        .sticker-phone {
+            position: absolute;
+            left: 50%;
+            bottom: 0;
+            width: 100%;
+            height: auto;
+            z-index: 1;
+            pointer-events: none;
+            user-select: none;
+            -webkit-user-drag: none;
+            transform-origin: 50% 70%;
+        }
+
+        .sticker-float {
+            position: absolute;
+            left: 50%;
+            z-index: 2;
+            pointer-events: none;
+            transform-style: preserve-3d;
+            transform-origin: center center;
+            will-change: transform, top;
+        }
+
+        .sticker-float .sticker-img {
+            width: 327px;
+            display: block;
+            backface-visibility: hidden;
+            -webkit-backface-visibility: hidden;
         }
 
         .sticker-picker {
@@ -428,8 +473,18 @@
 
         <!-- Sticker area -->
         <div class="sticker-area" id="sticker-area">
-            <div class="sticker-img-wrapper">
-                <img class="sticker-img" id="sticker-img" src="images/Pay_sticker_old.png" alt="Стикер">
+            <div class="sticker-view sticker-view-simple" id="sticker-view-simple">
+                <div class="sticker-img-wrapper">
+                    <img class="sticker-img" id="sticker-img-simple" src="images/Pay_sticker_old.png" alt="Стикер">
+                </div>
+            </div>
+            <div class="sticker-view sticker-view-interactive hidden" id="sticker-view-interactive">
+                <div class="sticker-stage" id="sticker-stage">
+                    <img class="sticker-phone" id="sticker-phone" src="images/Phone_back_empty.png" alt="">
+                    <div class="sticker-float" id="sticker-float">
+                        <img class="sticker-img" id="sticker-img-interactive" src="images/Pay_sticker.png" alt="Стикер">
+                    </div>
+                </div>
             </div>
             
             <div class="sticker-picker">
@@ -518,7 +573,7 @@
                     out[8]=a[8]; out[9]=a[9]; out[10]=a[10]; out[11]=a[11]; }
                 return out;
             },
-            
+
             rotateX: (out, a, rad) => {
                 const s = Math.sin(rad), c = Math.cos(rad);
                 const a10 = a[4], a11 = a[5], a12 = a[6], a13 = a[7];
@@ -682,77 +737,78 @@
             return { positions: new Float32Array(positions), uvs: new Float32Array(uvs), normals: new Float32Array(normals), indices: new Uint16Array(indices) };
         }
         
-        function createRoundedBoxGeometry(width, height, depth, radius) {
-            const segments = 8;
-            const hw = width/2, hh = height/2, hd = depth/2;
-            const r = Math.min(radius, hw, hh);
-            
-            function getRoundedRectPoints() {
-                const points = [];
-                points.push([-hw+r, -hh]); points.push([hw-r, -hh]);
-                for (let i = 0; i <= segments; i++) {
-                    const angle = Math.PI*1.5 + (Math.PI/2)*(i/segments);
-                    points.push([hw-r + Math.cos(angle)*r, -hh+r + Math.sin(angle)*r]);
-                }
-                points.push([hw, hh-r]);
-                for (let i = 0; i <= segments; i++) {
-                    const angle = 0 + (Math.PI/2)*(i/segments);
-                    points.push([hw-r + Math.cos(angle)*r, hh-r + Math.sin(angle)*r]);
-                }
-                points.push([-hw+r, hh]);
-                for (let i = 0; i <= segments; i++) {
-                    const angle = Math.PI/2 + (Math.PI/2)*(i/segments);
-                    points.push([-hw+r + Math.cos(angle)*r, hh-r + Math.sin(angle)*r]);
-                }
-                points.push([-hw, -hh+r]);
-                for (let i = 0; i <= segments; i++) {
-                    const angle = Math.PI + (Math.PI/2)*(i/segments);
-                    points.push([-hw+r + Math.cos(angle)*r, -hh+r + Math.sin(angle)*r]);
-                }
-                return points;
+        function getRoundedRectPoints(hw, hh, r, segments) {
+            const points = [];
+            points.push([-hw+r, -hh]); points.push([hw-r, -hh]);
+            for (let i = 0; i <= segments; i++) {
+                const angle = Math.PI*1.5 + (Math.PI/2)*(i/segments);
+                points.push([hw-r + Math.cos(angle)*r, -hh+r + Math.sin(angle)*r]);
             }
-            
-            const outline = getRoundedRectPoints();
+            points.push([hw, hh-r]);
+            for (let i = 0; i <= segments; i++) {
+                const angle = 0 + (Math.PI/2)*(i/segments);
+                points.push([hw-r + Math.cos(angle)*r, hh-r + Math.sin(angle)*r]);
+            }
+            points.push([-hw+r, hh]);
+            for (let i = 0; i <= segments; i++) {
+                const angle = Math.PI/2 + (Math.PI/2)*(i/segments);
+                points.push([-hw+r + Math.cos(angle)*r, hh-r + Math.sin(angle)*r]);
+            }
+            points.push([-hw, -hh+r]);
+            for (let i = 0; i <= segments; i++) {
+                const angle = Math.PI + (Math.PI/2)*(i/segments);
+                points.push([-hw+r + Math.cos(angle)*r, -hh+r + Math.sin(angle)*r]);
+            }
+            return points;
+        }
+
+        function buildMeshFromOutline(outline, depth) {
+            const hd = depth / 2;
             const numOutline = outline.length;
             const positions = [], normals = [], indices = [];
-            
-            // Front face
+
             const frontStart = positions.length / 3;
             positions.push(0, 0, hd); normals.push(0, 0, 1);
             for (const [x, y] of outline) { positions.push(x, y, hd); normals.push(0, 0, 1); }
             for (let i = 0; i < numOutline; i++) {
                 indices.push(frontStart, frontStart+1+i, frontStart+1+((i+1)%numOutline));
             }
-            
-            // Back face
+
             const backStart = positions.length / 3;
             positions.push(0, 0, -hd); normals.push(0, 0, -1);
             for (const [x, y] of outline) { positions.push(x, y, -hd); normals.push(0, 0, -1); }
             for (let i = 0; i < numOutline; i++) {
                 indices.push(backStart, backStart+1+((i+1)%numOutline), backStart+1+i);
             }
-            
-            // Side faces
+
             const sideStart = positions.length / 3;
             for (let i = 0; i < numOutline; i++) {
                 const [x, y] = outline[i];
-                const [nx, ny] = outline[(i+1) % numOutline];
+                const [nx, ny] = outline[(i + 1) % numOutline];
                 const dx = nx - x, dy = ny - y;
-                const len = Math.sqrt(dx*dx + dy*dy);
+                const len = Math.sqrt(dx*dx + dy*dy) || 1;
                 const normalX = dy / len, normalY = -dx / len;
-                
+
                 positions.push(x, y, hd, x, y, -hd, nx, ny, -hd, nx, ny, hd);
                 normals.push(normalX, normalY, 0, normalX, normalY, 0, normalX, normalY, 0, normalX, normalY, 0);
-                
+
                 const base = sideStart + i * 4;
                 indices.push(base, base+1, base+2, base, base+2, base+3);
             }
-            
+
             return {
                 positions: new Float32Array(positions),
                 normals: new Float32Array(normals),
                 indices: new Uint16Array(indices)
             };
+        }
+
+        function createRoundedBoxGeometry(width, height, depth, radius) {
+            const segments = 8;
+            const hw = width/2, hh = height/2;
+            const r = Math.min(radius, hw, hh);
+            const outline = getRoundedRectPoints(hw, hh, r, segments);
+            return buildMeshFromOutline(outline, depth);
         }
 
         // ============================================
@@ -820,6 +876,7 @@
             uniform vec3 uColor;
             uniform vec3 uLightPos;
             uniform float uAmbient;
+            uniform float uSpecStrength;
             varying vec3 vNormal;
             varying vec3 vViewPos;
             void main() {
@@ -828,7 +885,7 @@
                 vec3 V = normalize(vViewPos);
                 vec3 H = normalize(L + V);
                 float diff = max(dot(N, L), 0.0);
-                float spec = pow(max(dot(N, H), 0.0), 64.0) * 0.4;
+                float spec = pow(max(dot(N, H), 0.0), 64.0) * uSpecStrength;
                 vec3 color = uColor * (uAmbient + diff * 0.5) + vec3(spec);
                 gl_FragColor = vec4(color, 1.0);
             }
@@ -953,7 +1010,6 @@
             mat4.identity(viewMatrix);
             mat4.translate(viewMatrix, viewMatrix, [0, 0, -4.2]);
             
-            // Create card geometry
             createCard();
 
             // Load textures
@@ -993,7 +1049,7 @@
             edgeIndexCount = edgeGeo.indices.length;
             edgeVAO = { pos: edgePosBuffer, norm: edgeNormBuffer, idx: edgeIdxBuffer, count: edgeIndexCount };
         }
-        
+
         function updateTextures() {
             const skin = skins[currentSkin];
             frontTexture = loadTexture(skin.front);
@@ -1044,7 +1100,7 @@
             gl.drawElements(gl.TRIANGLES, vao.count, gl.UNSIGNED_SHORT, 0);
         }
         
-        function drawColoredMesh(program, vao, color, modelMat) {
+        function drawColoredMesh(program, vao, color, modelMat, specStrength = 0.4) {
             gl.useProgram(program);
             
             const mvMatrix = mat4.create();
@@ -1058,6 +1114,7 @@
             gl.uniformMatrix3fv(gl.getUniformLocation(program, 'uNormalMatrix'), false, normalMat);
             gl.uniform3fv(gl.getUniformLocation(program, 'uColor'), color);
             gl.uniform3fv(gl.getUniformLocation(program, 'uLightPos'), [3, 3, 5]);
+            gl.uniform1f(gl.getUniformLocation(program, 'uSpecStrength'), specStrength);
             gl.uniform1f(gl.getUniformLocation(program, 'uAmbient'), 0.4);
             
             const posLoc = gl.getAttribLocation(program, 'aPosition');
@@ -1212,8 +1269,31 @@
 
         const stickers = [
             { src: 'images/Pay_sticker_old.png', bg: 'sticker-0', themeColor: '#5A3C82' },
-            { src: 'images/Pay_sticker.png', bg: 'sticker-1', themeColor: '#D2C0E0' }
+            { src: 'images/Pay_sticker.png', bg: 'sticker-1', themeColor: '#D2C0E0', interactive: true, phone: 'images/Phone_back_empty.png' }
         ];
+
+        const STICKER_LAND = {
+            idleTop: 38,
+            landedTop: 52,
+            landedRot: 5,
+            landedScale: 0.7,
+            maxRotY: 20,
+            rotPerPx: 0.5,
+            maxScaleBoost: 0.14,
+            peakScale: 1.14,
+            dragThreshold: 12,
+            animDuration: 600,
+            phoneScaleStart: 0.38,
+            phoneScaleEnd: 1,
+            phoneBlurMax: 24
+        };
+
+        let stickerInteractState = 'idle';
+        let stickerDragStartX = 0;
+        let stickerDragRot = 0;
+        let stickerDragScale = 1;
+        let stickerDragFromLanded = false;
+        let stickerAnimFrame = null;
 
         function switchMode(mode) {
             if (currentMode === mode) return;
@@ -1247,13 +1327,233 @@
             stickers.forEach((_, i) => { document.getElementById('bg-sticker-' + i).style.opacity = 0; });
         }
 
+        function easeOutCubic(t) {
+            return 1 - Math.pow(1 - t, 3);
+        }
+
+        function applyStickerPose(rot, scale, topPct, phoneOpacity, phoneScale, phoneBlur, rotatePhone) {
+            const floatEl = document.getElementById('sticker-float');
+            const phoneEl = document.getElementById('sticker-phone');
+            if (!floatEl || !phoneEl) return;
+
+            floatEl.style.top = topPct + '%';
+            floatEl.style.transform = `translate(-50%, -50%) rotateY(${rot}deg) scale(${scale})`;
+            const phoneRot = rotatePhone ? rot : 0;
+            phoneEl.style.opacity = phoneOpacity;
+            phoneEl.style.transform = `translateX(-50%) rotateY(${phoneRot}deg) scale(${phoneScale})`;
+            phoneEl.style.filter = phoneBlur > 0.1 ? `blur(${phoneBlur}px)` : 'none';
+        }
+
+        function resetStickerInteraction() {
+            if (stickerAnimFrame) cancelAnimationFrame(stickerAnimFrame);
+            stickerAnimFrame = null;
+            stickerInteractState = 'idle';
+            stickerDragRot = 0;
+            stickerDragScale = 1;
+            applyStickerPose(0, 1, STICKER_LAND.idleTop, 0, STICKER_LAND.phoneScaleStart, STICKER_LAND.phoneBlurMax, false);
+        }
+
+        function snapStickerLanded() {
+            stickerInteractState = 'landed';
+            stickerDragRot = STICKER_LAND.landedRot;
+            stickerDragScale = STICKER_LAND.landedScale;
+            applyStickerPose(
+                STICKER_LAND.landedRot, STICKER_LAND.landedScale, STICKER_LAND.landedTop,
+                1, STICKER_LAND.phoneScaleEnd, 0, true
+            );
+        }
+
+        function snapStickerIdle() {
+            stickerInteractState = 'idle';
+            stickerDragRot = 0;
+            stickerDragScale = 1;
+            applyStickerPose(0, 1, STICKER_LAND.idleTop, 0, STICKER_LAND.phoneScaleStart, STICKER_LAND.phoneBlurMax, false);
+        }
+
+        function playStickerLanding() {
+            if (stickerAnimFrame) cancelAnimationFrame(stickerAnimFrame);
+            stickerInteractState = 'animating';
+
+            const startRot = stickerDragRot;
+            const startScale = stickerDragScale;
+            const duration = STICKER_LAND.animDuration;
+            const t0 = performance.now();
+            const { phoneScaleStart, phoneScaleEnd, phoneBlurMax } = STICKER_LAND;
+
+            if (navigator.vibrate) navigator.vibrate(8);
+
+            function frame(now) {
+                const p = Math.min(1, (now - t0) / duration);
+                const e = easeOutCubic(p);
+
+                const rot = startRot * (1 - e) + STICKER_LAND.landedRot * e;
+                const top = STICKER_LAND.idleTop + (STICKER_LAND.landedTop - STICKER_LAND.idleTop) * e;
+                const scale = startScale + (STICKER_LAND.landedScale - startScale) * e;
+                const phoneOpacity = e;
+                const phoneScale = phoneScaleStart + (phoneScaleEnd - phoneScaleStart) * e;
+                const phoneBlur = phoneBlurMax * (1 - e);
+
+                applyStickerPose(rot, scale, top, phoneOpacity, phoneScale, phoneBlur, e > 0.05);
+
+                if (p < 1) {
+                    stickerAnimFrame = requestAnimationFrame(frame);
+                } else {
+                    stickerAnimFrame = null;
+                    snapStickerLanded();
+                }
+            }
+            stickerAnimFrame = requestAnimationFrame(frame);
+        }
+
+        function playStickerUnland() {
+            if (stickerAnimFrame) cancelAnimationFrame(stickerAnimFrame);
+            stickerInteractState = 'animating';
+
+            const startRot = stickerDragRot;
+            const startScale = stickerDragScale;
+            const duration = STICKER_LAND.animDuration;
+            const t0 = performance.now();
+            const { phoneScaleStart, phoneScaleEnd, phoneBlurMax, peakScale } = STICKER_LAND;
+
+            if (navigator.vibrate) navigator.vibrate(8);
+
+            function frame(now) {
+                const p = Math.min(1, (now - t0) / duration);
+                const e = easeOutCubic(p);
+
+                const rot = startRot * (1 - e);
+                const top = STICKER_LAND.landedTop + (STICKER_LAND.idleTop - STICKER_LAND.landedTop) * e;
+
+                let scale;
+                if (p < 0.45) {
+                    const t = easeOutCubic(p / 0.45);
+                    scale = startScale + (peakScale - startScale) * t;
+                } else {
+                    const t = easeOutCubic((p - 0.45) / 0.55);
+                    scale = peakScale + (1 - peakScale) * t;
+                }
+
+                const phoneOpacity = 1 - e;
+                const phoneScale = phoneScaleEnd + (phoneScaleStart - phoneScaleEnd) * e;
+                const phoneBlur = phoneBlurMax * e;
+
+                applyStickerPose(rot, scale, top, phoneOpacity, phoneScale, phoneBlur, phoneOpacity > 0.05);
+
+                if (p < 1) {
+                    stickerAnimFrame = requestAnimationFrame(frame);
+                } else {
+                    stickerAnimFrame = null;
+                    snapStickerIdle();
+                }
+            }
+            stickerAnimFrame = requestAnimationFrame(frame);
+        }
+
+        function stickerDragUpdate(deltaX) {
+            const dragRot = deltaX * STICKER_LAND.rotPerPx;
+
+            if (stickerDragFromLanded) {
+                stickerDragRot = STICKER_LAND.landedRot + Math.max(-STICKER_LAND.maxRotY, Math.min(STICKER_LAND.maxRotY, dragRot));
+                stickerDragScale = STICKER_LAND.landedScale;
+                applyStickerPose(
+                    stickerDragRot, stickerDragScale, STICKER_LAND.landedTop,
+                    1, STICKER_LAND.phoneScaleEnd, 0, true
+                );
+            } else {
+                const rotY = Math.max(-STICKER_LAND.maxRotY, Math.min(STICKER_LAND.maxRotY, dragRot));
+                const t = Math.abs(rotY) / STICKER_LAND.maxRotY;
+                stickerDragRot = rotY;
+                stickerDragScale = 1 + STICKER_LAND.maxScaleBoost * t;
+                applyStickerPose(stickerDragRot, stickerDragScale, STICKER_LAND.idleTop, 0, STICKER_LAND.phoneScaleStart, STICKER_LAND.phoneBlurMax, false);
+            }
+        }
+
+        function stickerDragEnd(deltaX) {
+            if (Math.abs(deltaX) >= STICKER_LAND.dragThreshold) {
+                if (stickerDragFromLanded) playStickerUnland();
+                else playStickerLanding();
+            } else if (stickerDragFromLanded) {
+                snapStickerLanded();
+            } else {
+                snapStickerIdle();
+            }
+        }
+
+        function setupStickerInteraction() {
+            const stage = document.getElementById('sticker-stage');
+            if (!stage) return;
+
+            let dragging = false;
+            let startX = 0;
+
+            const onStart = (clientX) => {
+                if (stickerInteractState === 'animating') return;
+                stickerDragFromLanded = stickerInteractState === 'landed';
+                dragging = true;
+                startX = clientX;
+                stickerInteractState = 'dragging';
+            };
+
+            const onMove = (clientX) => {
+                if (!dragging) return;
+                stickerDragUpdate(clientX - startX);
+            };
+
+            const onEnd = (clientX) => {
+                if (!dragging) return;
+                dragging = false;
+                const delta = clientX - startX;
+                stickerDragEnd(delta);
+            };
+
+            stage.addEventListener('touchstart', e => {
+                e.preventDefault();
+                onStart(e.touches[0].clientX);
+            }, { passive: false });
+
+            stage.addEventListener('touchmove', e => {
+                if (!dragging) return;
+                e.preventDefault();
+                onMove(e.touches[0].clientX);
+            }, { passive: false });
+
+            stage.addEventListener('touchend', e => {
+                onEnd(e.changedTouches[0].clientX);
+            });
+
+            stage.addEventListener('mousedown', e => {
+                onStart(e.clientX);
+                const onMouseMove = ev => onMove(ev.clientX);
+                const onMouseUp = ev => {
+                    onEnd(ev.clientX);
+                    window.removeEventListener('mousemove', onMouseMove);
+                    window.removeEventListener('mouseup', onMouseUp);
+                };
+                window.addEventListener('mousemove', onMouseMove);
+                window.addEventListener('mouseup', onMouseUp);
+            });
+        }
+
         function selectSticker(index) {
             currentSticker = index;
-            document.getElementById('sticker-img').src = stickers[index].src;
+            const s = stickers[index];
+            const isInteractive = !!s.interactive;
+
+            document.getElementById('sticker-view-simple').classList.toggle('hidden', isInteractive);
+            document.getElementById('sticker-view-interactive').classList.toggle('hidden', !isInteractive);
+
+            if (isInteractive) {
+                document.getElementById('sticker-img-interactive').src = s.src;
+                document.getElementById('sticker-phone').src = s.phone;
+                resetStickerInteraction();
+            } else {
+                document.getElementById('sticker-img-simple').src = s.src;
+            }
+
             document.querySelectorAll('.sticker-circle').forEach((el, i) => el.classList.toggle('selected', i === index));
             hideAllBackgrounds();
             document.getElementById('bg-sticker-' + index).style.opacity = 1;
-            document.getElementById('theme-color').setAttribute('content', stickers[index].themeColor);
+            document.getElementById('theme-color').setAttribute('content', s.themeColor);
             if (navigator.vibrate) navigator.vibrate(5);
         }
         
@@ -1319,11 +1619,12 @@
             
         function animate() {
             requestAnimationFrame(animate);
-            render();
+            if (currentMode === 'card') render();
         }
         
         // Start
         init();
+        setupStickerInteraction();
         playHintAnimation();
     </script>
 </body>
