@@ -282,25 +282,6 @@
             display: none;
         }
 
-        .sticker-img-wrapper {
-            width: 327px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .sticker-img {
-            width: 100%;
-            object-fit: contain;
-            user-select: none;
-            -webkit-user-drag: none;
-        }
-
-        .sticker-view-simple.hidden,
-        .sticker-view-interactive.hidden {
-            display: none;
-        }
-
         .sticker-stage {
             width: 327px;
             height: 280px;
@@ -473,17 +454,10 @@
 
         <!-- Sticker area -->
         <div class="sticker-area" id="sticker-area">
-            <div class="sticker-view sticker-view-simple" id="sticker-view-simple">
-                <div class="sticker-img-wrapper">
-                    <img class="sticker-img" id="sticker-img-simple" src="images/Pay_sticker_old.png" alt="Стикер">
-                </div>
-            </div>
-            <div class="sticker-view sticker-view-interactive hidden" id="sticker-view-interactive">
-                <div class="sticker-stage" id="sticker-stage">
-                    <img class="sticker-phone" id="sticker-phone" src="images/Phone_back_empty.png" alt="">
-                    <div class="sticker-float" id="sticker-float">
-                        <img class="sticker-img" id="sticker-img-interactive" src="images/Pay_sticker.png" alt="Стикер">
-                    </div>
+            <div class="sticker-stage" id="sticker-stage">
+                <img class="sticker-phone" id="sticker-phone" src="images/Phone_back_empty.png" alt="">
+                <div class="sticker-float" id="sticker-float">
+                    <img class="sticker-img" id="sticker-img" src="images/Pay_sticker_old.png" alt="Стикер">
                 </div>
             </div>
             
@@ -1268,11 +1242,11 @@
         let currentSticker = 0;
 
         const stickers = [
-            { src: 'images/Pay_sticker_old.png', bg: 'sticker-0', themeColor: '#5A3C82' },
-            { src: 'images/Pay_sticker.png', bg: 'sticker-1', themeColor: '#D2C0E0', interactive: true, phone: 'images/Phone_back_empty.png' }
+            { src: 'images/Pay_sticker_old.png', bg: 'sticker-0', themeColor: '#5A3C82', phone: 'images/Phone_back_empty.png' },
+            { src: 'images/Pay_sticker.png', bg: 'sticker-1', themeColor: '#D2C0E0', phone: 'images/Phone_back_empty.png' }
         ];
 
-        // Позиции и анимация стикера (радужный). Редактируй значения ниже.
+        // Позиции и анимация стикеров (оба скина). Редактируй значения ниже.
         const STICKER_LAND = {
             idleTop: 48,      // ← стикер на лицевой стороне: больше % = ниже в контейнере
             landedTop: 54,      // ← стикер на телефоне (задняя сторона)
@@ -1538,18 +1512,10 @@
         function selectSticker(index) {
             currentSticker = index;
             const s = stickers[index];
-            const isInteractive = !!s.interactive;
 
-            document.getElementById('sticker-view-simple').classList.toggle('hidden', isInteractive);
-            document.getElementById('sticker-view-interactive').classList.toggle('hidden', !isInteractive);
-
-            if (isInteractive) {
-                document.getElementById('sticker-img-interactive').src = s.src;
-                document.getElementById('sticker-phone').src = s.phone;
-                resetStickerInteraction();
-            } else {
-                document.getElementById('sticker-img-simple').src = s.src;
-            }
+            document.getElementById('sticker-img').src = s.src;
+            document.getElementById('sticker-phone').src = s.phone;
+            resetStickerInteraction();
 
             document.querySelectorAll('.sticker-circle').forEach((el, i) => el.classList.toggle('selected', i === index));
             hideAllBackgrounds();
