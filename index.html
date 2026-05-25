@@ -100,10 +100,32 @@
             fill: rgba(0, 0, 0, 0.86);
         }
 
-        .header-title {
-            font-size: 17px;
+        .header-tabs {
+            display: flex;
+            background: rgba(0, 0, 0, 0.06);
+            border-radius: 10px;
+            padding: 2px;
+            gap: 0;
+        }
+
+        .header-tab {
+            padding: 6px 20px;
+            border-radius: 8px;
+            font-size: 15px;
             font-weight: 500;
+            font-family: inherit;
+            color: rgba(0, 0, 0, 0.5);
+            background: none;
+            border: none;
+            cursor: pointer;
+            transition: all 0.25s ease;
+            white-space: nowrap;
+        }
+
+        .header-tab.active {
+            background: white;
             color: rgba(0, 0, 0, 0.86);
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
         }
 
         /* Card container */
@@ -242,6 +264,102 @@
             opacity: 0.9;
         }
 
+        /* Sticker area */
+        .sticker-area {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            padding-top: 10px;
+            overflow: visible;
+        }
+
+        .sticker-area.visible {
+            display: flex;
+        }
+
+        .card-area.hidden {
+            display: none;
+        }
+
+        .sticker-img-wrapper {
+            width: 327px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .sticker-img {
+            width: 100%;
+            object-fit: contain;
+            transition: opacity 0.3s ease;
+        }
+
+        .sticker-picker {
+            display: flex;
+            gap: 24px;
+            justify-content: center;
+            margin-top: 8px;
+        }
+
+        .sticker-circle {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            cursor: pointer;
+            position: relative;
+            transition: transform 0.2s ease;
+        }
+
+        .sticker-circle::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            border: 2px solid transparent;
+            transition: all 0.2s ease;
+        }
+
+        .sticker-circle.selected::before {
+            border-color: rgba(0, 0, 0, 0.9);
+        }
+
+        .sticker-circle-inner {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            border-radius: 50%;
+            transition: all 0.2s ease;
+            width: 60px;
+            height: 60px;
+        }
+
+        .sticker-circle.selected .sticker-circle-inner {
+            width: 52px;
+            height: 52px;
+        }
+
+        .sticker-0-gradient {
+            background: linear-gradient(135deg, rgb(60, 40, 90) 0%, rgb(90, 60, 130) 100%);
+        }
+
+        .sticker-1-gradient {
+            background: linear-gradient(135deg, rgb(230, 180, 200) 0%, rgb(200, 170, 220) 50%, rgb(180, 200, 230) 100%);
+        }
+
+        .bg-sticker-0 {
+            background: radial-gradient(ellipse at 5% 0%, rgb(60, 40, 100) 0%, rgb(110, 90, 150) 100%);
+        }
+
+        .bg-sticker-1 {
+            background: radial-gradient(ellipse at 5% 0%, rgb(200, 170, 220) 0%, rgb(210, 200, 230) 100%);
+        }
+
         .background-video {
             position: fixed;
             top: 0;
@@ -261,6 +379,8 @@
     <div class="background-gradient bg-skin-2" id="bg-2" style="opacity: 0;"></div>
     <div class="background-gradient bg-skin-3" id="bg-3" style="opacity: 0;"></div>
     <div class="background-gradient bg-skin-4" id="bg-4" style="opacity: 0;"></div>
+    <div class="background-gradient bg-sticker-0" id="bg-sticker-0" style="opacity: 0;"></div>
+    <div class="background-gradient bg-sticker-1" id="bg-sticker-1" style="opacity: 0;"></div>
     <video class="background-video" id="bg-video" style="opacity: 0;" autoplay loop muted playsinline poster="images/bg_pay_poster.png" src="images/bg_pay.mp4"></video>
 
     <div class="container">
@@ -271,7 +391,10 @@
                     <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/>
                 </svg>
             </button>
-            <span class="header-title">Для покупок офлайн</span>
+            <div class="header-tabs">
+                <button class="header-tab active" id="tab-card">Карта</button>
+                <button class="header-tab" id="tab-sticker">Стикер</button>
+            </div>
             <button class="header-btn">
                 <svg viewBox="0 0 24 24">
                     <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-2h2v2zm2.07-7.75l-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z"/>
@@ -303,15 +426,31 @@
             </div>
         </div>
 
+        <!-- Sticker area -->
+        <div class="sticker-area" id="sticker-area">
+            <div class="sticker-img-wrapper">
+                <img class="sticker-img" id="sticker-img" src="images/Pay_sticker_old.png" alt="Стикер">
+            </div>
+            
+            <div class="sticker-picker">
+                <div class="sticker-circle selected" data-sticker="0" id="sticker-btn-0">
+                    <div class="sticker-circle-inner sticker-0-gradient"></div>
+                </div>
+                <div class="sticker-circle" data-sticker="1" id="sticker-btn-1">
+                    <div class="sticker-circle-inner sticker-1-gradient"></div>
+                </div>
+            </div>
+        </div>
+
         <!-- Bottom island -->
         <div class="bottom-island">
-            <h1 class="bottom-title">Карта</h1>
-            <p class="bottom-description">
+            <h1 class="bottom-title" id="bottom-title">Карта</h1>
+            <p class="bottom-description" id="bottom-description">
                 Бесплатная и с кешбэком<br>
                 баллами Плюса — чтобы приклеить<br>
                 на телефон или куда вздумается
             </p>
-            <button class="order-button">Заказать бесплатно</button>
+            <button class="order-button" id="order-button">Заказать бесплатно</button>
         </div>
     </div>
 
@@ -1043,6 +1182,13 @@
             skins.forEach((_, i) => {
                 document.getElementById('skin-btn-' + i).addEventListener('click', () => selectSkin(i));
             });
+            
+            stickers.forEach((_, i) => {
+                document.getElementById('sticker-btn-' + i).addEventListener('click', () => selectSticker(i));
+            });
+
+            document.getElementById('tab-card').addEventListener('click', () => switchMode('card'));
+            document.getElementById('tab-sticker').addEventListener('click', () => switchMode('sticker'));
         }
 
         function checkFlip() {
@@ -1060,18 +1206,74 @@
         const themeColors = ['#D9FAE0', '#D4F5E3', '#DEE0E4', '#F0C8C0', '#808083'];
         
         const videoSkins = [2, 3, 4];
+
+        let currentMode = 'card'; // 'card' or 'sticker'
+        let currentSticker = 0;
+
+        const stickers = [
+            { src: 'images/Pay_sticker_old.png', bg: 'sticker-0', themeColor: '#5A3C82' },
+            { src: 'images/Pay_sticker.png', bg: 'sticker-1', themeColor: '#D2C0E0' }
+        ];
+
+        function switchMode(mode) {
+            if (currentMode === mode) return;
+            currentMode = mode;
+
+            document.getElementById('tab-card').classList.toggle('active', mode === 'card');
+            document.getElementById('tab-sticker').classList.toggle('active', mode === 'sticker');
+
+            const cardArea = document.querySelector('.card-area');
+            const stickerArea = document.getElementById('sticker-area');
+
+            if (mode === 'card') {
+                cardArea.classList.remove('hidden');
+                stickerArea.classList.remove('visible');
+                selectSkin(currentSkin);
+                document.getElementById('bottom-title').textContent = 'Карта';
+                document.getElementById('bottom-description').innerHTML = 'Бесплатная и с кешбэком<br>баллами Плюса — чтобы приклеить<br>на телефон или куда вздумается';
+            } else {
+                cardArea.classList.add('hidden');
+                stickerArea.classList.add('visible');
+                hideAllBackgrounds();
+                selectSticker(currentSticker);
+                document.getElementById('bottom-title').textContent = 'Стикер';
+                document.getElementById('bottom-description').innerHTML = 'Бесплатная и с кешбэком<br>баллами Плюса — чтобы приклеить<br>на телефон или куда вздумается';
+            }
+        }
+
+        function hideAllBackgrounds() {
+            skins.forEach((_, i) => { document.getElementById('bg-' + i).style.opacity = 0; });
+            document.getElementById('bg-video').style.opacity = 0;
+            stickers.forEach((_, i) => { document.getElementById('bg-sticker-' + i).style.opacity = 0; });
+        }
+
+        function selectSticker(index) {
+            currentSticker = index;
+            document.getElementById('sticker-img').src = stickers[index].src;
+            document.querySelectorAll('.sticker-circle').forEach((el, i) => el.classList.toggle('selected', i === index));
+            hideAllBackgrounds();
+            document.getElementById('bg-sticker-' + index).style.opacity = 1;
+            document.getElementById('theme-color').setAttribute('content', stickers[index].themeColor);
+            if (navigator.vibrate) navigator.vibrate(5);
+        }
         
         function selectSkin(index) {
-            if (currentSkin === index) return;
+            const changed = currentSkin !== index;
             const dir = index > currentSkin ? 1 : -1;
             currentSkin = index;
             document.querySelectorAll('.skin-circle').forEach((el, i) => el.classList.toggle('selected', i === index));
-            skins.forEach((_, i) => { document.getElementById('bg-' + i).style.opacity = i === index && !videoSkins.includes(i) ? 1 : 0; });
-            document.getElementById('bg-video').style.opacity = videoSkins.includes(index) ? 1 : 0;
+            hideAllBackgrounds();
+            if (!videoSkins.includes(index)) {
+                document.getElementById('bg-' + index).style.opacity = 1;
+            } else {
+                document.getElementById('bg-video').style.opacity = 1;
+            }
             document.getElementById('theme-color').setAttribute('content', themeColors[index]);
-            updateTextures();
-            if (navigator.vibrate) navigator.vibrate(5);
-            shakeCard(dir);
+            if (changed) {
+                updateTextures();
+                if (navigator.vibrate) navigator.vibrate(5);
+                shakeCard(dir);
+            }
         }
         
         function shakeCard(direction) {
