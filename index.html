@@ -1269,6 +1269,7 @@
         let stickerDragScale = 1;
         let stickerDragFromLanded = false;
         let stickerAnimFrame = null;
+        let stickerShakeRot = 0;
 
         function switchMode(mode) {
             if (currentMode === mode) return;
@@ -1311,17 +1312,33 @@
             const phoneEl = document.getElementById('sticker-phone');
             if (!floatEl || !phoneEl) return;
 
+            const rotY = rot + stickerShakeRot;
             floatEl.style.top = topPct + '%';
-            floatEl.style.transform = `translate(-50%, -50%) rotateY(${rot}deg) scale(${scale})`;
-            const phoneRot = rotatePhone ? rot : 0;
+            floatEl.style.transform = `translate(-50%, -50%) rotateY(${rotY}deg) scale(${scale})`;
+            const phoneRot = rotatePhone ? rotY : 0;
             phoneEl.style.opacity = phoneOpacity;
             phoneEl.style.transform = `translateX(-50%) rotateY(${phoneRot}deg) scale(${phoneScale})`;
             phoneEl.style.filter = phoneBlur > 0.1 ? `blur(${phoneBlur}px)` : 'none';
         }
 
+        function refreshStickerPose() {
+            if (stickerInteractState === 'landed') {
+                applyStickerPose(
+                    STICKER_LAND.landedRot, STICKER_LAND.landedScale, STICKER_LAND.landedTop,
+                    1, STICKER_LAND.phoneScaleEnd, 0, true
+                );
+            } else {
+                applyStickerPose(
+                    stickerDragRot, stickerDragScale, STICKER_LAND.idleTop,
+                    0, STICKER_LAND.phoneScaleStart, STICKER_LAND.phoneBlurMax, false
+                );
+            }
+        }
+
         function resetStickerInteraction() {
             if (stickerAnimFrame) cancelAnimationFrame(stickerAnimFrame);
             stickerAnimFrame = null;
+            stickerShakeRot = 0;
             stickerInteractState = 'idle';
             stickerDragRot = 0;
             stickerDragScale = 1;
@@ -1509,7 +1526,28 @@
             });
         }
 
+        function shakeSticker(direction) {
+            const duration = 350;
+            const startTime = performance.now();
+            const dipDeg = 7 * direction;
+
+            function anim(time) {
+                const progress = (time - startTime) / duration;
+                if (progress < 1) {
+                    stickerShakeRot = dipDeg * Math.sin(progress * Math.PI);
+                    refreshStickerPose();
+                    requestAnimationFrame(anim);
+                } else {
+                    stickerShakeRot = 0;
+                    refreshStickerPose();
+                }
+            }
+            requestAnimationFrame(anim);
+        }
+
         function selectSticker(index) {
+            const changed = currentSticker !== index;
+            const dir = index > currentSticker ? 1 : -1;
             currentSticker = index;
             const s = stickers[index];
 
@@ -1521,7 +1559,10 @@
             hideAllBackgrounds();
             document.getElementById('bg-sticker-' + index).style.opacity = 1;
             document.getElementById('theme-color').setAttribute('content', s.themeColor);
-            if (navigator.vibrate) navigator.vibrate(5);
+            if (changed) {
+                if (navigator.vibrate) navigator.vibrate(5);
+                shakeSticker(dir);
+            }
         }
         
         function selectSkin(index) {
