@@ -940,9 +940,8 @@
                 vec3 glossHolo = mix(glossBase + vec3(spec * (1.0 - maskVal)), rainbow, glossStrength) + vec3(glossGrain) * maskVal;
                 glossHolo += vec3(flare) * maskVal * hlFade;
                 
-                float g = (grain(vUV * 800.0) - 0.5) * 0.03;
                 vec3 matteRainbow = hsv2rgb(vec3(hue, sat * 0.1, val * 0.95));
-                vec3 matteHolo = mix(baseColor, matteRainbow, 0.05) + vec3(g);
+                vec3 matteHolo = mix(baseColor, matteRainbow, 0.05);
                 
                 vec3 holoColor = mix(matteHolo, glossHolo, maskVal);
                 
