@@ -492,12 +492,13 @@
         // ============================================
 
         // Card skins configuration
+        // cornerRadius — скругление лицевой/задней плоскости и рёбер (подложки между ними)
         const skins = [
-            { front: 'images/card_front.png', back: 'images/card_back.png', edge: [0.95, 0.45, 0.65] },
-            { front: 'images/card_front_2.png', back: 'images/card_back_2.png', edge: [0.5, 0.8, 0.75] },
-            { front: 'images/Pay front.png', back: 'images/Pay back silver.png', mask: 'images/Pay mask.png', edge: [0.85, 0.85, 0.85], holographic: true },
-            { front: 'images/Pay front red.png', back: 'images/Pay back red.png', mask: 'images/Pay mask.png', edge: [0.85, 0.85, 0.85], holographic: true },
-            { front: 'images/Pay front black.png', back: 'images/Pay back black.png', mask: 'images/Pay mask.png', edge: [0.15, 0.15, 0.17], holographic: true }
+            { front: 'images/card_front.png', back: 'images/card_back.png', edge: [0.95, 0.45, 0.65], cornerRadius: 0.10 },
+            { front: 'images/card_front_2.png', back: 'images/card_back_2.png', edge: [0.5, 0.8, 0.75], cornerRadius: 0.10 },
+            { front: 'images/Pay front.png', back: 'images/Pay back silver.png', mask: 'images/Pay mask.png', edge: [0.85, 0.85, 0.85], holographic: true, cornerRadius: 0.16 },
+            { front: 'images/Pay front red.png', back: 'images/Pay back red.png', mask: 'images/Pay mask.png', edge: [0.85, 0.85, 0.85], holographic: true, cornerRadius: 0.16 },
+            { front: 'images/Pay front black.png', back: 'images/Pay back black.png', mask: 'images/Pay mask.png', edge: [0.15, 0.15, 0.17], holographic: true, cornerRadius: 0.16 }
         ];
 
         let currentSkin = 0;
@@ -984,7 +985,7 @@
             mat4.identity(viewMatrix);
             mat4.translate(viewMatrix, viewMatrix, [0, 0, -4.2]);
             
-            createCard();
+            updateCardGeometry(currentSkin);
 
             // Load textures
             const skin = skins[currentSkin];
@@ -996,8 +997,9 @@
             animate();
         }
 
-        function createCard() {
-            const cardWidth = 3.2, cardHeight = 2.02, cardDepth = 0.04, cornerRadius = 0.10;
+        function updateCardGeometry(skinIndex) {
+            const cornerRadius = skins[skinIndex].cornerRadius ?? 0.10;
+            const cardWidth = 3.2, cardHeight = 2.02, cardDepth = 0.04;
             
             // Front plane (rounded)
             const frontGeo = createPlaneGeometry(cardWidth, cardHeight, cornerRadius);
@@ -1015,8 +1017,8 @@
             const backIdxBuffer = createBuffer(backGeo.indices, gl.ELEMENT_ARRAY_BUFFER);
             backVAO = { pos: backPosBuffer, uv: backUVBuffer, norm: backNormBuffer, idx: backIdxBuffer, count: backGeo.indices.length, z: -cardDepth/2 - 0.005 };
             
-            // Edge
-            const edgeGeo = createRoundedBoxGeometry(cardWidth, cardHeight, cardDepth, 0.10);
+            // Edge (подложка между передней и задней стороной)
+            const edgeGeo = createRoundedBoxGeometry(cardWidth, cardHeight, cardDepth, cornerRadius);
             const edgePosBuffer = createBuffer(edgeGeo.positions);
             const edgeNormBuffer = createBuffer(edgeGeo.normals);
             const edgeIdxBuffer = createBuffer(edgeGeo.indices, gl.ELEMENT_ARRAY_BUFFER);
@@ -1579,6 +1581,7 @@
             document.getElementById('theme-color').setAttribute('content', themeColors[index]);
             if (changed) {
                 updateTextures();
+                updateCardGeometry(index);
                 if (navigator.vibrate) navigator.vibrate(5);
                 shakeCard(dir);
             }
