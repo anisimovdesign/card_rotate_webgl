@@ -55,14 +55,18 @@
         }
 
         .bg-skin-2 {
-            background: radial-gradient(ellipse at 5% 0%, rgb(190, 195, 200) 0%, rgb(225, 228, 232) 100%);
+            background: radial-gradient(ellipse at 5% 0%, rgb(133, 169, 141) 0%, rgb(218, 238, 222) 100%);
         }
 
         .bg-skin-3 {
-            background: radial-gradient(ellipse at 5% 0%, rgb(235, 120, 100) 0%, rgb(245, 200, 190) 100%);
+            background: radial-gradient(ellipse at 5% 0%, rgb(190, 195, 200) 0%, rgb(225, 228, 232) 100%);
         }
 
         .bg-skin-4 {
+            background: radial-gradient(ellipse at 5% 0%, rgb(235, 120, 100) 0%, rgb(245, 200, 190) 100%);
+        }
+
+        .bg-skin-5 {
             background: radial-gradient(ellipse at 5% 0%, rgb(60, 60, 65) 0%, rgb(140, 140, 145) 100%);
         }
 
@@ -204,14 +208,18 @@
         }
 
         .skin-2-gradient {
-            background: linear-gradient(135deg, rgb(195, 200, 210) 0%, rgb(215, 220, 228) 100%);
+            background: linear-gradient(135deg, rgb(105, 137, 112) 0%, rgb(170, 199, 177) 100%);
         }
 
         .skin-3-gradient {
-            background: linear-gradient(135deg, rgb(230, 100, 80) 0%, rgb(240, 140, 120) 100%);
+            background: linear-gradient(135deg, rgb(195, 200, 210) 0%, rgb(215, 220, 228) 100%);
         }
 
         .skin-4-gradient {
+            background: linear-gradient(135deg, rgb(230, 100, 80) 0%, rgb(240, 140, 120) 100%);
+        }
+
+        .skin-5-gradient {
             background: linear-gradient(135deg, rgb(50, 50, 55) 0%, rgb(85, 85, 90) 100%);
         }
 
@@ -396,6 +404,24 @@
             z-index: 0;
             transition: opacity 0.3s ease;
         }
+
+        @media (max-width: 520px) {
+            .skin-picker {
+                gap: 6px;
+            }
+
+            .skin-circle,
+            .skin-circle::before,
+            .skin-circle-inner {
+                width: 48px;
+                height: 48px;
+            }
+
+            .skin-circle.selected .skin-circle-inner {
+                width: 40px;
+                height: 40px;
+            }
+        }
     </style>
 </head>
 <body class="skin-0">
@@ -405,8 +431,10 @@
     <div class="background-gradient bg-skin-2" id="bg-2" style="opacity: 0;"></div>
     <div class="background-gradient bg-skin-3" id="bg-3" style="opacity: 0;"></div>
     <div class="background-gradient bg-skin-4" id="bg-4" style="opacity: 0;"></div>
+    <div class="background-gradient bg-skin-5" id="bg-5" style="opacity: 0;"></div>
     <div class="background-gradient bg-sticker-0" id="bg-sticker-0" style="opacity: 0;"></div>
     <div class="background-gradient bg-sticker-1" id="bg-sticker-1" style="opacity: 0;"></div>
+    <video class="background-video" id="bg-split-video" style="opacity: 0;" autoplay loop muted playsinline src="images/Split_bg_video.mp4"></video>
     <video class="background-video" id="bg-video" style="opacity: 0;" autoplay loop muted playsinline poster="images/bg_pay_poster.png" src="images/bg_pay.mp4"></video>
 
     <div class="container">
@@ -448,6 +476,9 @@
                 </div>
                 <div class="skin-circle" data-skin="4" id="skin-btn-4">
                     <div class="skin-circle-inner skin-4-gradient"></div>
+                </div>
+                <div class="skin-circle" data-skin="5" id="skin-btn-5">
+                    <div class="skin-circle-inner skin-5-gradient"></div>
                 </div>
             </div>
         </div>
@@ -496,6 +527,19 @@
         const skins = [
             { front: 'images/card_front.png', back: 'images/card_back.png', edge: [0.95, 0.45, 0.65], cornerRadius: 0.10 },
             { front: 'images/card_front_2.png', back: 'images/card_back_2.png', edge: [0.5, 0.8, 0.75], cornerRadius: 0.10 },
+            {
+                front: 'images/Super_Split_V3_front.png',
+                back: 'images/Super_Split_V3_bacl.png',
+                mask: 'images/Super_Split_V3_mask.png',
+                edge: [0.95, 0.95, 0.95],
+                holographic: true,
+                cornerRadius: 0.16,
+                matteHoloStrength: 0.10,
+                matteHoloSaturation: 1.00,
+                backgroundSpecStrength: 0.025,
+                highlightYOffset: 0.20,
+                highlightScale: 2.0
+            },
             { front: 'images/Pay front.png', back: 'images/Pay back silver.png', mask: 'images/Pay mask.png', edge: [0.85, 0.85, 0.85], holographic: true, cornerRadius: 0.16 },
             { front: 'images/Pay front red.png', back: 'images/Pay back red.png', mask: 'images/Pay mask.png', edge: [0.85, 0.85, 0.85], holographic: true, cornerRadius: 0.16 },
             { front: 'images/Pay front black.png', back: 'images/Pay back black.png', mask: 'images/Pay mask.png', edge: [0.15, 0.15, 0.17], holographic: true, cornerRadius: 0.16 }
@@ -873,6 +917,11 @@
             uniform float uRotationAngle;
             uniform vec3 uLightPos;
             uniform float uAmbient;
+            uniform float uMatteHoloStrength;
+            uniform float uMatteHoloSaturation;
+            uniform float uBackgroundSpecStrength;
+            uniform float uHighlightYOffset;
+            uniform float uHighlightScale;
             varying vec2 vUV;
             varying vec3 vNormal;
             varying vec3 vViewPos;
@@ -915,9 +964,9 @@
                 float hue = fract((n1 + n2 + n3 + n4) * 0.12 + a * 0.15 + 0.15);
                 
                 float hlX = 0.5 + sin(a + 0.1) * 0.45;
-                float hlY = 0.5 + cos(a * 0.7 + 3.2) * 0.3;
+                float hlY = 0.5 + uHighlightYOffset + cos(a * 0.7 + 3.2) * 0.3;
                 float hlDist = length(vUV - vec2(hlX, hlY));
-                float hlFade = 1.0 - smoothstep(0.15, 0.55, hlDist);
+                float hlFade = 1.0 - smoothstep(0.15 * uHighlightScale, 0.55 * uHighlightScale, hlDist);
                 
                 float sat = (0.42 + 0.12 * (sin(vUV.x * 2.0 - vUV.y * 1.5 + a) * 0.5 + 0.5)) * hlFade;
                 float val = 0.95 + 0.05 * n3;
@@ -927,7 +976,7 @@
                 fresnel = pow(fresnel, 2.0);
                 
                 // Блик по фону — как на задней стороне; на буквах свой gloss/flare
-                float bgSpec = pow(max(dot(N, H), 0.0), 32.0) * 0.1;
+                float bgSpec = pow(max(dot(N, H), 0.0), 32.0) * uBackgroundSpecStrength;
                 float matteSpec = spec * maskVal;
                 vec3 baseColor = tex.rgb * (uAmbient + diff * 0.5) + vec3(matteSpec + bgSpec * (1.0 - maskVal));
                 
@@ -942,8 +991,8 @@
                 vec3 glossHolo = mix(glossBase + vec3(spec * (1.0 - maskVal)), rainbow, glossStrength) + vec3(glossGrain) * maskVal;
                 glossHolo += vec3(flare) * maskVal * hlFade;
                 
-                vec3 matteRainbow = hsv2rgb(vec3(hue, sat * 0.1, val * 0.95));
-                vec3 matteHolo = mix(baseColor, matteRainbow, 0.05);
+                vec3 matteRainbow = hsv2rgb(vec3(hue, sat * uMatteHoloSaturation, val * 0.95));
+                vec3 matteHolo = mix(baseColor, matteRainbow, uMatteHoloStrength);
                 
                 vec3 holoColor = mix(matteHolo, glossHolo, maskVal);
                 
@@ -1109,7 +1158,7 @@
             gl.drawElements(gl.TRIANGLES, vao.count, gl.UNSIGNED_SHORT, 0);
         }
         
-        function drawHoloMesh(vao, baseTexture, maskTex, rotAngle, modelMat) {
+        function drawHoloMesh(vao, baseTexture, maskTex, rotAngle, modelMat, skin) {
             gl.useProgram(holoProgram);
             
             const mvMatrix = mat4.create();
@@ -1124,6 +1173,11 @@
             gl.uniform3fv(gl.getUniformLocation(holoProgram, 'uLightPos'), [3, 3, 5]);
             gl.uniform1f(gl.getUniformLocation(holoProgram, 'uAmbient'), 0.5);
             gl.uniform1f(gl.getUniformLocation(holoProgram, 'uRotationAngle'), rotAngle);
+            gl.uniform1f(gl.getUniformLocation(holoProgram, 'uMatteHoloStrength'), skin.matteHoloStrength ?? 0.05);
+            gl.uniform1f(gl.getUniformLocation(holoProgram, 'uMatteHoloSaturation'), skin.matteHoloSaturation ?? 0.1);
+            gl.uniform1f(gl.getUniformLocation(holoProgram, 'uBackgroundSpecStrength'), skin.backgroundSpecStrength ?? 0.1);
+            gl.uniform1f(gl.getUniformLocation(holoProgram, 'uHighlightYOffset'), skin.highlightYOffset ?? 0.0);
+            gl.uniform1f(gl.getUniformLocation(holoProgram, 'uHighlightScale'), skin.highlightScale ?? 1.0);
             
             gl.activeTexture(gl.TEXTURE0);
             gl.bindTexture(gl.TEXTURE_2D, baseTexture);
@@ -1176,7 +1230,7 @@
             mat4.rotateX(frontMat, frontMat, rotX);
             mat4.translate(frontMat, frontMat, [0, 0, frontVAO.z]);
             if (skin.holographic && maskTexture) {
-                drawHoloMesh(frontVAO, frontTexture, maskTexture, rotY, frontMat);
+                drawHoloMesh(frontVAO, frontTexture, maskTexture, rotY, frontMat, skin);
             } else {
                 drawTexturedMesh(frontProgram, frontVAO, frontTexture, frontMat);
             }
@@ -1237,9 +1291,14 @@
             lastRotationY = snapped;
         }
         
-        const themeColors = ['#D9FAE0', '#D4F5E3', '#DEE0E4', '#F0C8C0', '#808083'];
+        const themeColors = ['#D9FAE0', '#D4F5E3', '#DAEEDE', '#DEE0E4', '#F0C8C0', '#808083'];
         
-        const videoSkins = [2, 3, 4];
+        const backgroundVideoBySkin = {
+            2: 'bg-split-video',
+            3: 'bg-video',
+            4: 'bg-video',
+            5: 'bg-video'
+        };
 
         let currentMode = 'card'; // 'card' or 'sticker'
         let currentSticker = 0;
@@ -1302,6 +1361,7 @@
 
         function hideAllBackgrounds() {
             skins.forEach((_, i) => { document.getElementById('bg-' + i).style.opacity = 0; });
+            document.getElementById('bg-split-video').style.opacity = 0;
             document.getElementById('bg-video').style.opacity = 0;
             stickers.forEach((_, i) => { document.getElementById('bg-sticker-' + i).style.opacity = 0; });
         }
@@ -1574,10 +1634,11 @@
             currentSkin = index;
             document.querySelectorAll('.skin-circle').forEach((el, i) => el.classList.toggle('selected', i === index));
             hideAllBackgrounds();
-            if (!videoSkins.includes(index)) {
-                document.getElementById('bg-' + index).style.opacity = 1;
+            const backgroundVideoId = backgroundVideoBySkin[index];
+            if (backgroundVideoId) {
+                document.getElementById(backgroundVideoId).style.opacity = 1;
             } else {
-                document.getElementById('bg-video').style.opacity = 1;
+                document.getElementById('bg-' + index).style.opacity = 1;
             }
             document.getElementById('theme-color').setAttribute('content', themeColors[index]);
             if (changed) {
