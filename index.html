@@ -533,6 +533,7 @@
                 mask: 'images/Super_Split_V3_mask.png',
                 edge: [0.95, 0.95, 0.95],
                 holographic: true,
+                holoMode: 'splitFoil',
                 cornerRadius: 0.16,
                 matteHoloStrength: 0.10,
                 matteHoloSaturation: 1.00,
@@ -547,7 +548,7 @@
 
         let currentSkin = 0;
         let gl, canvas;
-        let frontProgram, backProgram, edgeProgram, holoProgram;
+        let frontProgram, backProgram, edgeProgram, holoProgram, splitHoloProgram;
         let frontVAO, backVAO, edgeVAO;
         let frontTexture, backTexture, maskTexture;
         let projectionMatrix, viewMatrix, modelMatrix;
@@ -1000,6 +1001,151 @@
             }
         `;
 
+        // Super Split uses a separate material. The reference card has one large,
+        // irregular foil bloom rather than the smaller oil-slick pattern used by Pay.
+        const splitHoloFS = `
+            precision highp float;
+            uniform sampler2D uTexture;
+            uniform sampler2D uMask;
+            uniform float uRotationAngle;
+            uniform vec3 uLightPos;
+            uniform float uAmbient;
+            uniform float uMatteHoloStrength;
+            uniform float uMatteHoloSaturation;
+            uniform float uBackgroundSpecStrength;
+            varying vec2 vUV;
+            varying vec3 vNormal;
+            varying vec3 vViewPos;
+
+            float grain(vec2 p) {
+                vec2 q = floor(p);
+                return fract(sin(dot(q, vec2(127.1, 311.7))) * 43758.5453);
+            }
+
+            vec3 foilSpectrum(float phase) {
+                const float TAU = 6.28318530718;
+                vec3 spectral = 0.5 + 0.5 * cos(TAU * (phase + vec3(0.02, 0.19, 0.43)));
+                return mix(spectral, vec3(0.48, 0.92, 0.22), 0.20);
+            }
+
+            vec3 bodyFoilSpectrum(float phase) {
+                const float TAU = 6.28318530718;
+                float orange = pow(0.5 + 0.5 * cos(TAU * (phase - 0.24)), 3.2);
+                float yellow = pow(0.5 + 0.5 * cos(TAU * (phase - 0.44)), 3.0);
+                float green = pow(0.5 + 0.5 * cos(TAU * (phase - 0.64)), 3.4);
+                float cyan = pow(0.5 + 0.5 * cos(TAU * (phase - 0.84)), 4.2);
+                float orangeWeight = orange * 1.25;
+                float yellowWeight = yellow * 1.45;
+                float greenWeight = green * 0.72;
+                float cyanWeight = cyan * 0.12;
+                float totalWeight = orangeWeight + yellowWeight + greenWeight + cyanWeight;
+                vec3 foilColor = (
+                    vec3(0.96, 0.43, 0.08) * orangeWeight
+                    + vec3(1.00, 0.89, 0.10) * yellowWeight
+                    + vec3(0.34, 0.79, 0.19) * greenWeight
+                    + vec3(0.22, 0.74, 0.64) * cyanWeight
+                ) / max(totalWeight, 0.001);
+                vec3 quietGreen = vec3(0.45, 0.68, 0.20);
+                return mix(quietGreen, foilColor, clamp(totalWeight * 0.72, 0.0, 1.0));
+            }
+
+            float organicBloom(vec2 uv, float angle) {
+                float tilt = sin(angle);
+                vec2 center = vec2(
+                    0.50 - tilt * 0.78,
+                    0.50
+                        + sin(angle * 1.65 + 0.8) * 0.14
+                        + sin(angle * 3.10) * 0.035
+                );
+
+                vec2 p = uv - center;
+                p.x += sin(uv.y * 7.0 + angle * 0.65) * 0.075;
+                p.x += sin(uv.y * 15.0 - angle * 0.9) * 0.020;
+                p.y += sin(uv.x * 5.0 - angle * 0.55) * 0.060;
+
+                float mainDistance = length(vec2(p.x / 0.52, p.y / 0.88));
+                float mainShape = exp(-1.05 * mainDistance * mainDistance);
+
+                vec2 secondaryCenter = center + vec2(
+                    -0.13 + sin(angle * 1.3) * 0.04,
+                    0.17 + cos(angle * 1.1) * 0.05
+                );
+                vec2 q = uv - secondaryCenter;
+                q.x += sin(uv.y * 9.0 - angle) * 0.055;
+                float secondaryDistance = length(vec2(q.x / 0.43, q.y / 0.66));
+                float secondaryShape = exp(-1.20 * secondaryDistance * secondaryDistance);
+
+                float movementResponse = 0.20 + 0.80 * smoothstep(0.03, 0.48, abs(tilt));
+                float softUnion = 1.0 - (1.0 - mainShape) * (1.0 - secondaryShape * 0.58);
+                return clamp(softUnion * movementResponse, 0.0, 1.0);
+            }
+
+            void main() {
+                vec4 tex = texture2D(uTexture, vUV);
+                vec4 maskColor = texture2D(uMask, vUV);
+                float maskLum = dot(maskColor.rgb, vec3(0.299, 0.587, 0.114));
+                float logoMask = smoothstep(0.10, 0.35, maskColor.a * (1.0 - maskLum));
+
+                vec3 N = normalize(vNormal);
+                vec3 L = normalize(uLightPos - (-vViewPos));
+                vec3 V = normalize(vViewPos);
+                vec3 H = normalize(L + V);
+                float diffuse = max(dot(N, L), 0.0);
+                float surfaceSpec = pow(max(dot(N, H), 0.0), 38.0) * uBackgroundSpecStrength;
+
+                float maxChannel = max(tex.r, max(tex.g, tex.b));
+                float minChannel = min(tex.r, min(tex.g, tex.b));
+                float texLuma = dot(tex.rgb, vec3(0.299, 0.587, 0.114));
+                float neutralMetal = smoothstep(0.56, 0.76, texLuma)
+                    * (1.0 - smoothstep(0.05, 0.16, maxChannel - minChannel));
+                float chipArea = smoothstep(0.09, 0.12, vUV.x)
+                    * (1.0 - smoothstep(0.24, 0.27, vUV.x))
+                    * smoothstep(0.48, 0.51, vUV.y)
+                    * (1.0 - smoothstep(0.66, 0.69, vUV.y));
+                float chipMask = chipArea * neutralMetal;
+
+                float bloom = organicBloom(vUV, uRotationAngle);
+                float tilt = sin(uRotationAngle);
+                float warpedX = vUV.x
+                    + sin(vUV.y * 5.5 + uRotationAngle * 0.55) * 0.075
+                    + sin(vUV.y * 12.0 - uRotationAngle) * 0.018;
+                float phase = fract(
+                    warpedX * 0.72
+                    - vUV.y * 0.16
+                    + tilt * 0.24
+                    + 0.10
+                );
+
+                vec3 spectrum = bodyFoilSpectrum(phase);
+                float spectrumLuma = dot(spectrum, vec3(0.299, 0.587, 0.114));
+                spectrum = mix(vec3(spectrumLuma), spectrum, uMatteHoloSaturation);
+
+                vec3 baseColor = tex.rgb * (0.62 + diffuse * 0.44);
+                baseColor *= vec3(0.94, 1.08, 0.91);
+                baseColor += vec3(0.005, 0.018, 0.002);
+                baseColor += vec3(surfaceSpec);
+
+                float bodyMix = bloom * (0.28 + uMatteHoloStrength);
+                vec3 bodyColor = mix(baseColor, spectrum, bodyMix);
+                bodyColor += spectrum * pow(bloom, 2.0) * 0.075;
+
+                float fineGrain = grain(vUV * 1150.0 + vec2(19.7, 73.1)) - 0.5;
+                bodyColor += vec3(fineGrain * (0.004 + bloom * 0.007));
+
+                vec3 logoSpectrum = foilSpectrum(fract(phase * 1.65 + 0.31));
+                float logoMix = clamp(0.08 + bloom * 0.86, 0.0, 0.94);
+                float logoFlare = pow(max(dot(N, H), 0.0), 18.0) * bloom * 0.22;
+                vec3 logoColor = mix(baseColor, logoSpectrum, logoMix) + vec3(logoFlare);
+
+                vec3 chipColor = tex.rgb * (0.90 + diffuse * 0.22)
+                    + vec3(pow(max(dot(N, H), 0.0), 52.0) * 0.12);
+
+                vec3 color = mix(bodyColor, logoColor, logoMask);
+                color = mix(color, chipColor, chipMask);
+                gl_FragColor = vec4(color, tex.a);
+            }
+        `;
+
         // ============================================
         // INITIALIZATION
         // ============================================
@@ -1024,6 +1170,7 @@
             backProgram = createProgram(texturedVS, texturedFS);
             edgeProgram = createProgram(coloredVS, coloredFS);
             holoProgram = createProgram(texturedVS, holoFS);
+            splitHoloProgram = createProgram(texturedVS, splitHoloFS);
             
             // Create matrices
             projectionMatrix = mat4.create();
@@ -1159,7 +1306,8 @@
         }
         
         function drawHoloMesh(vao, baseTexture, maskTex, rotAngle, modelMat, skin) {
-            gl.useProgram(holoProgram);
+            const program = skin.holoMode === 'splitFoil' ? splitHoloProgram : holoProgram;
+            gl.useProgram(program);
             
             const mvMatrix = mat4.create();
             mat4.multiply(mvMatrix, viewMatrix, modelMat);
@@ -1167,29 +1315,29 @@
             const normalMat = new Float32Array(9);
             mat4.normalFromMat4(normalMat, mvMatrix);
             
-            gl.uniformMatrix4fv(gl.getUniformLocation(holoProgram, 'uProjection'), false, projectionMatrix);
-            gl.uniformMatrix4fv(gl.getUniformLocation(holoProgram, 'uModelView'), false, mvMatrix);
-            gl.uniformMatrix3fv(gl.getUniformLocation(holoProgram, 'uNormalMatrix'), false, normalMat);
-            gl.uniform3fv(gl.getUniformLocation(holoProgram, 'uLightPos'), [3, 3, 5]);
-            gl.uniform1f(gl.getUniformLocation(holoProgram, 'uAmbient'), 0.5);
-            gl.uniform1f(gl.getUniformLocation(holoProgram, 'uRotationAngle'), rotAngle);
-            gl.uniform1f(gl.getUniformLocation(holoProgram, 'uMatteHoloStrength'), skin.matteHoloStrength ?? 0.05);
-            gl.uniform1f(gl.getUniformLocation(holoProgram, 'uMatteHoloSaturation'), skin.matteHoloSaturation ?? 0.1);
-            gl.uniform1f(gl.getUniformLocation(holoProgram, 'uBackgroundSpecStrength'), skin.backgroundSpecStrength ?? 0.1);
-            gl.uniform1f(gl.getUniformLocation(holoProgram, 'uHighlightYOffset'), skin.highlightYOffset ?? 0.0);
-            gl.uniform1f(gl.getUniformLocation(holoProgram, 'uHighlightScale'), skin.highlightScale ?? 1.0);
+            gl.uniformMatrix4fv(gl.getUniformLocation(program, 'uProjection'), false, projectionMatrix);
+            gl.uniformMatrix4fv(gl.getUniformLocation(program, 'uModelView'), false, mvMatrix);
+            gl.uniformMatrix3fv(gl.getUniformLocation(program, 'uNormalMatrix'), false, normalMat);
+            gl.uniform3fv(gl.getUniformLocation(program, 'uLightPos'), [3, 3, 5]);
+            gl.uniform1f(gl.getUniformLocation(program, 'uAmbient'), 0.5);
+            gl.uniform1f(gl.getUniformLocation(program, 'uRotationAngle'), rotAngle);
+            gl.uniform1f(gl.getUniformLocation(program, 'uMatteHoloStrength'), skin.matteHoloStrength ?? 0.05);
+            gl.uniform1f(gl.getUniformLocation(program, 'uMatteHoloSaturation'), skin.matteHoloSaturation ?? 0.1);
+            gl.uniform1f(gl.getUniformLocation(program, 'uBackgroundSpecStrength'), skin.backgroundSpecStrength ?? 0.1);
+            gl.uniform1f(gl.getUniformLocation(program, 'uHighlightYOffset'), skin.highlightYOffset ?? 0.0);
+            gl.uniform1f(gl.getUniformLocation(program, 'uHighlightScale'), skin.highlightScale ?? 1.0);
             
             gl.activeTexture(gl.TEXTURE0);
             gl.bindTexture(gl.TEXTURE_2D, baseTexture);
-            gl.uniform1i(gl.getUniformLocation(holoProgram, 'uTexture'), 0);
+            gl.uniform1i(gl.getUniformLocation(program, 'uTexture'), 0);
             
             gl.activeTexture(gl.TEXTURE1);
             gl.bindTexture(gl.TEXTURE_2D, maskTex);
-            gl.uniform1i(gl.getUniformLocation(holoProgram, 'uMask'), 1);
+            gl.uniform1i(gl.getUniformLocation(program, 'uMask'), 1);
             
-            const posLoc = gl.getAttribLocation(holoProgram, 'aPosition');
-            const uvLoc = gl.getAttribLocation(holoProgram, 'aUV');
-            const normLoc = gl.getAttribLocation(holoProgram, 'aNormal');
+            const posLoc = gl.getAttribLocation(program, 'aPosition');
+            const uvLoc = gl.getAttribLocation(program, 'aUV');
+            const normLoc = gl.getAttribLocation(program, 'aNormal');
             
             gl.bindBuffer(gl.ARRAY_BUFFER, vao.pos);
             gl.enableVertexAttribArray(posLoc);
