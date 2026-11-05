@@ -209,7 +209,12 @@
         }
 
         .skin-2-gradient {
-            background: linear-gradient(135deg, rgb(105, 137, 112) 0%, rgb(170, 199, 177) 100%);
+            background: radial-gradient(
+                circle farthest-corner at 78% 88%,
+                #44E367 0%,
+                #44E367 40%,
+                #FDCE35 81%
+            );
         }
 
         .skin-3-gradient {
@@ -937,7 +942,11 @@
             
             float grain(vec2 p) {
                 vec2 q = floor(p);
-                return fract(sin(dot(q, vec2(127.1, 311.7))) * 43758.5453);
+                // Keep every intermediate bounded: large sine arguments can lose
+                // precision in WebGL fragment shaders and occasionally render black.
+                vec3 p3 = fract(vec3(q.x, q.y, q.x) * 0.1031);
+                p3 += dot(p3, p3.yzx + 33.33);
+                return fract((p3.x + p3.y) * p3.z);
             }
             
             void main() {
@@ -1022,7 +1031,11 @@
 
             float grain(vec2 p) {
                 vec2 q = floor(p);
-                return fract(sin(dot(q, vec2(127.1, 311.7))) * 43758.5453);
+                // Trig-free, bounded hash avoids isolated invalid fragments on
+                // mobile/WebKit GPUs while preserving the same 0..1 grain signal.
+                vec3 p3 = fract(vec3(q.x, q.y, q.x) * 0.1031);
+                p3 += dot(p3, p3.yzx + 33.33);
+                return fract((p3.x + p3.y) * p3.z);
             }
 
             vec3 foilSpectrum(float phase) {
@@ -1033,10 +1046,12 @@
 
             vec3 bodyFoilSpectrum(float phase) {
                 const float TAU = 6.28318530718;
-                float orange = pow(0.5 + 0.5 * cos(TAU * (phase - 0.24)), 3.2);
-                float yellow = pow(0.5 + 0.5 * cos(TAU * (phase - 0.44)), 3.0);
-                float green = pow(0.5 + 0.5 * cos(TAU * (phase - 0.64)), 3.4);
-                float cyan = pow(0.5 + 0.5 * cos(TAU * (phase - 0.84)), 4.2);
+                // GPU cosine approximations can undershoot -1 by a tiny amount.
+                // Clamp before fractional powers so no spectral band can emit NaN.
+                float orange = pow(clamp(0.5 + 0.5 * cos(TAU * (phase - 0.24)), 0.0, 1.0), 3.2);
+                float yellow = pow(clamp(0.5 + 0.5 * cos(TAU * (phase - 0.44)), 0.0, 1.0), 3.0);
+                float green = pow(clamp(0.5 + 0.5 * cos(TAU * (phase - 0.64)), 0.0, 1.0), 3.4);
+                float cyan = pow(clamp(0.5 + 0.5 * cos(TAU * (phase - 0.84)), 0.0, 1.0), 4.2);
                 float orangeWeight = orange * 1.25;
                 float yellowWeight = yellow * 1.45;
                 float greenWeight = green * 0.72;
