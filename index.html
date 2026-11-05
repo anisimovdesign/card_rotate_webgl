@@ -435,7 +435,7 @@
     <div class="background-gradient bg-skin-5" id="bg-5" style="opacity: 0;"></div>
     <div class="background-gradient bg-sticker-0" id="bg-sticker-0" style="opacity: 0;"></div>
     <div class="background-gradient bg-sticker-1" id="bg-sticker-1" style="opacity: 0;"></div>
-    <video class="background-video" id="bg-split-video" style="opacity: 0;" autoplay loop muted playsinline src="images/Split_bg_video.mp4?v=20261005-2"></video>
+    <video class="background-video" id="bg-split-video" style="opacity: 0;" autoplay loop muted playsinline src="images/Split_bg_video_tint20.mp4?v=20261105-1"></video>
     <video class="background-video" id="bg-video" style="opacity: 0;" autoplay loop muted playsinline poster="images/bg_pay_poster.png" src="images/bg_pay.mp4"></video>
 
     <div class="container">
@@ -532,6 +532,7 @@
                 front: 'images/Super_Split_V3_front.png',
                 back: 'images/Super_Split_V3_bacl.png',
                 mask: 'images/Super_Split_V3_mask.png',
+                chipMask: 'images/super v3 mask chip.png',
                 edge: [0.95, 0.95, 0.95],
                 holographic: true,
                 holoMode: 'splitFoil',
@@ -551,7 +552,7 @@
         let gl, canvas;
         let frontProgram, backProgram, edgeProgram, holoProgram, splitHoloProgram;
         let frontVAO, backVAO, edgeVAO;
-        let frontTexture, backTexture, maskTexture;
+        let frontTexture, backTexture, maskTexture, chipMaskTexture;
         let projectionMatrix, viewMatrix, modelMatrix;
         let rotationY = 0, targetRotationY = 0, lastRotationY = 0;
         let isDragging = false, startX = 0, isShowingBack = false;
@@ -1008,6 +1009,7 @@
             precision highp float;
             uniform sampler2D uTexture;
             uniform sampler2D uMask;
+            uniform sampler2D uChipMask;
             uniform float uRotationAngle;
             uniform vec3 uLightPos;
             uniform float uAmbient;
@@ -1050,12 +1052,33 @@
                 return mix(quietGreen, foilColor, clamp(totalWeight * 0.72, 0.0, 1.0));
             }
 
-            float organicBloom(vec2 uv, float angle) {
+            float splitLogoMaskSample(vec2 uv) {
+                vec4 maskSample = texture2D(uMask, uv);
+                float maskLuma = dot(maskSample.rgb, vec3(0.299, 0.587, 0.114));
+                return maskSample.a * (1.0 - maskLuma);
+            }
+
+            float splitLogoMask(vec2 uv) {
+                // The source mask is much larger than its on-screen footprint and
+                // NPOT textures do not get mipmaps in WebGL 1. Average a compact
+                // source-pixel footprint so the embossed edge stays continuous.
+                vec2 aaOffset = vec2(4.0 / 2532.0, 4.0 / 1596.0);
+                float maskAverage = splitLogoMaskSample(uv) * 0.40;
+                maskAverage += splitLogoMaskSample(uv + vec2(-aaOffset.x, -aaOffset.y)) * 0.15;
+                maskAverage += splitLogoMaskSample(uv + vec2( aaOffset.x, -aaOffset.y)) * 0.15;
+                maskAverage += splitLogoMaskSample(uv + vec2(-aaOffset.x,  aaOffset.y)) * 0.15;
+                maskAverage += splitLogoMaskSample(uv + vec2( aaOffset.x,  aaOffset.y)) * 0.15;
+                return smoothstep(0.08, 0.92, maskAverage);
+            }
+
+            float organicBloom(vec2 uv, float angle, out float rightBloom) {
                 float tilt = sin(angle);
+                // At rest the broad matte foil bloom lives in the upper-left,
+                // then travels from that anchor as the card turns.
                 vec2 center = vec2(
-                    0.50 - tilt * 0.78,
-                    0.50
-                        + sin(angle * 1.65 + 0.8) * 0.14
+                    -0.10 - tilt * 0.78,
+                    1.10
+                        + (sin(angle * 1.65 + 0.8) - sin(0.8)) * 0.14
                         + sin(angle * 3.10) * 0.035
                 );
 
@@ -1064,8 +1087,8 @@
                 p.x += sin(uv.y * 15.0 - angle * 0.9) * 0.020;
                 p.y += sin(uv.x * 5.0 - angle * 0.55) * 0.060;
 
-                float mainDistance = length(vec2(p.x / 0.52, p.y / 0.88));
-                float mainShape = exp(-1.05 * mainDistance * mainDistance);
+                float mainDistance = length(vec2(p.x / 0.68, p.y / 1.05));
+                float mainShape = exp(-0.92 * mainDistance * mainDistance);
 
                 vec2 secondaryCenter = center + vec2(
                     -0.13 + sin(angle * 1.3) * 0.04,
@@ -1073,19 +1096,32 @@
                 );
                 vec2 q = uv - secondaryCenter;
                 q.x += sin(uv.y * 9.0 - angle) * 0.055;
-                float secondaryDistance = length(vec2(q.x / 0.43, q.y / 0.66));
-                float secondaryShape = exp(-1.20 * secondaryDistance * secondaryDistance);
+                float secondaryDistance = length(vec2(q.x / 0.55, q.y / 0.82));
+                float secondaryShape = exp(-1.08 * secondaryDistance * secondaryDistance);
 
-                float movementResponse = 0.20 + 0.80 * smoothstep(0.03, 0.48, abs(tilt));
                 float softUnion = 1.0 - (1.0 - mainShape) * (1.0 - secondaryShape * 0.58);
-                return clamp(softUnion * movementResponse, 0.0, 1.0);
+
+                // On a left turn the anchored bloom keeps travelling left while
+                // a second, similarly soft reflection enters from the right edge.
+                float leftTurn = smoothstep(0.05, 0.42, tilt);
+                vec2 rightCenter = vec2(
+                    1.16 - leftTurn * 0.25,
+                    0.72 - tilt * 0.10
+                );
+                vec2 r = uv - rightCenter;
+                r.x += sin(uv.y * 6.5 - angle * 0.70) * 0.065;
+                r.y += sin(uv.x * 4.8 + angle * 0.45) * 0.050;
+                float rightDistance = length(vec2(r.x / 0.50, r.y / 0.82));
+                float rightShape = exp(-1.05 * rightDistance * rightDistance) * leftTurn;
+
+                rightBloom = clamp(rightShape * 0.92, 0.0, 1.0);
+                return clamp(softUnion, 0.0, 1.0);
             }
 
             void main() {
                 vec4 tex = texture2D(uTexture, vUV);
-                vec4 maskColor = texture2D(uMask, vUV);
-                float maskLum = dot(maskColor.rgb, vec3(0.299, 0.587, 0.114));
-                float logoMask = smoothstep(0.10, 0.35, maskColor.a * (1.0 - maskLum));
+                float logoMask = splitLogoMask(vUV);
+                float chipMask = texture2D(uChipMask, vUV).a;
 
                 vec3 N = normalize(vNormal);
                 vec3 L = normalize(uLightPos - (-vViewPos));
@@ -1094,19 +1130,17 @@
                 float diffuse = max(dot(N, L), 0.0);
                 float surfaceSpec = pow(max(dot(N, H), 0.0), 38.0) * uBackgroundSpecStrength;
 
-                float maxChannel = max(tex.r, max(tex.g, tex.b));
-                float minChannel = min(tex.r, min(tex.g, tex.b));
-                float texLuma = dot(tex.rgb, vec3(0.299, 0.587, 0.114));
-                float neutralMetal = smoothstep(0.56, 0.76, texLuma)
-                    * (1.0 - smoothstep(0.05, 0.16, maxChannel - minChannel));
-                float chipArea = smoothstep(0.09, 0.12, vUV.x)
-                    * (1.0 - smoothstep(0.24, 0.27, vUV.x))
-                    * smoothstep(0.48, 0.51, vUV.y)
-                    * (1.0 - smoothstep(0.66, 0.69, vUV.y));
-                float chipMask = chipArea * neutralMetal;
-
-                float bloom = organicBloom(vUV, uRotationAngle);
+                float rightBloom;
+                float bloom = organicBloom(vUV, uRotationAngle, rightBloom);
                 float tilt = sin(uRotationAngle);
+                float logoFrontFacing = smoothstep(0.90, 0.995, cos(uRotationAngle));
+                float logoReliefVisibility = 0.42 + logoFrontFacing * 0.58;
+                vec2 logoLightDirection = normalize(vec2(-0.72, 0.69));
+                vec2 logoBevelOffset = logoLightDirection * vec2(10.0 / 2532.0, 10.0 / 1596.0);
+                vec2 logoShadowOffset = logoLightDirection * vec2(9.0 / 2532.0, 9.0 / 1596.0);
+                float logoBevelLight = max(logoMask - splitLogoMask(vUV + logoBevelOffset), 0.0);
+                float logoBevelShade = max(logoMask - splitLogoMask(vUV - logoBevelOffset), 0.0);
+                float logoContactShadow = max(splitLogoMask(vUV + logoShadowOffset) - logoMask, 0.0);
                 float warpedX = vUV.x
                     + sin(vUV.y * 5.5 + uRotationAngle * 0.55) * 0.075
                     + sin(vUV.y * 12.0 - uRotationAngle) * 0.018;
@@ -1126,20 +1160,54 @@
                 baseColor += vec3(0.005, 0.018, 0.002);
                 baseColor += vec3(surfaceSpec);
 
-                float bodyMix = bloom * (0.28 + uMatteHoloStrength);
-                vec3 bodyColor = mix(baseColor, spectrum, bodyMix);
-                bodyColor += spectrum * pow(bloom, 2.0) * 0.075;
+                vec3 primarySpectrum = mix(
+                    spectrum,
+                    vec3(1.00, 0.90, 0.42),
+                    logoFrontFacing * 0.30
+                );
+                float bodyMix = bloom * (
+                    0.34 + uMatteHoloStrength + logoFrontFacing * 0.18
+                );
+                vec3 bodyColor = mix(baseColor, primarySpectrum, min(bodyMix, 0.72));
+                bodyColor += primarySpectrum * pow(bloom, 1.70)
+                    * (0.10 + logoFrontFacing * 0.08);
+
+                // Give the entering reflection its own warmer spectral band so it
+                // remains legible against the green body instead of disappearing.
+                vec3 rightSpectrum = bodyFoilSpectrum(fract(phase - 0.35));
+                float rightSpectrumLuma = dot(rightSpectrum, vec3(0.299, 0.587, 0.114));
+                rightSpectrum = mix(
+                    vec3(rightSpectrumLuma),
+                    rightSpectrum,
+                    min(1.0, uMatteHoloSaturation * 1.25)
+                );
+                float rightMix = rightBloom * (0.46 + uMatteHoloStrength);
+                bodyColor = mix(bodyColor, rightSpectrum, rightMix);
+                bodyColor += rightSpectrum * pow(rightBloom, 2.0) * 0.12;
 
                 float fineGrain = grain(vUV * 1150.0 + vec2(19.7, 73.1)) - 0.5;
                 bodyColor += vec3(fineGrain * (0.004 + bloom * 0.007));
+                bodyColor *= 1.0 - logoContactShadow * logoReliefVisibility * 0.08;
 
                 vec3 logoSpectrum = foilSpectrum(fract(phase * 1.65 + 0.31));
                 float logoMix = clamp(0.08 + bloom * 0.86, 0.0, 0.94);
                 float logoFlare = pow(max(dot(N, H), 0.0), 18.0) * bloom * 0.22;
                 vec3 logoColor = mix(baseColor, logoSpectrum, logoMix) + vec3(logoFlare);
 
-                vec3 chipColor = tex.rgb * (0.90 + diffuse * 0.22)
-                    + vec3(pow(max(dot(N, H), 0.0), 52.0) * 0.12);
+                // Keep the existing colorful foil while turning, but let the logo
+                // settle into a denser neutral metal when the card faces the viewer.
+                float logoMetalGrain = grain(vUV * 920.0 + vec2(13.1, 47.9)) - 0.5;
+                float logoMetalSpec = pow(max(dot(N, H), 0.0), 26.0) * 0.12;
+                vec3 logoFrontMetal = vec3(
+                    0.42 + diffuse * 0.07 + logoMetalSpec + logoMetalGrain * 0.035
+                ) * vec3(0.99, 1.00, 1.01);
+                logoColor = mix(logoColor, logoFrontMetal, logoFrontFacing * 0.68);
+                logoColor += vec3(logoBevelLight * logoReliefVisibility * 0.16);
+                logoColor *= 1.0 - logoBevelShade * logoReliefVisibility * 0.12;
+
+                // The chip is restored from the source artwork after every dynamic
+                // layer, so it follows the card geometry but not its holographic light.
+                vec3 chipColor = tex.rgb;
 
                 vec3 color = mix(bodyColor, logoColor, logoMask);
                 color = mix(color, chipColor, chipMask);
@@ -1190,6 +1258,7 @@
             frontTexture = loadTexture(skin.front);
             backTexture = loadTexture(skin.back);
             if (skin.mask) maskTexture = loadTexture(skin.mask);
+            if (skin.chipMask) chipMaskTexture = loadTexture(skin.chipMask);
             
             setupEventListeners();
             animate();
@@ -1229,6 +1298,7 @@
             frontTexture = loadTexture(skin.front);
             backTexture = loadTexture(skin.back);
             maskTexture = skin.mask ? loadTexture(skin.mask) : null;
+            chipMaskTexture = skin.chipMask ? loadTexture(skin.chipMask) : null;
         }
 
         // ============================================
@@ -1335,6 +1405,12 @@
             gl.activeTexture(gl.TEXTURE1);
             gl.bindTexture(gl.TEXTURE_2D, maskTex);
             gl.uniform1i(gl.getUniformLocation(program, 'uMask'), 1);
+
+            if (skin.holoMode === 'splitFoil' && chipMaskTexture) {
+                gl.activeTexture(gl.TEXTURE2);
+                gl.bindTexture(gl.TEXTURE_2D, chipMaskTexture);
+                gl.uniform1i(gl.getUniformLocation(program, 'uChipMask'), 2);
+            }
             
             const posLoc = gl.getAttribLocation(program, 'aPosition');
             const uvLoc = gl.getAttribLocation(program, 'aUV');
